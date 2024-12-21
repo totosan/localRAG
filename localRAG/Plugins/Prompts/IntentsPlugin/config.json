@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "type": "completion",
+  "description": "Add intent questions and phrases to its intent word.",
+  "completion": {
+    "max_tokens": 1000,
+    "temperature": 1.0,
+    "top_p": 0.0,
+    "presence_penalty": 0.0,
+    "frequency_penalty": 2.0
+  },
+  "input": {
+    "parameters": [
+      {
+        "name": "intent",
+        "description": "The intent to generate phrases and questions for.",
+        "defaultValue": ""
+      }
+    ]
+  }
+}

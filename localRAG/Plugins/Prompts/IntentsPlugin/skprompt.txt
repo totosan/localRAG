@@ -1,0 +1,42 @@
+You are an AI Assistant, that helps in defining phrase artefacts, to describe the following given intents better. 
+If a user asks or even just throws few words (like a google search intention), it should be assigned to it's intetion.
+So you help in preparing questions and key words wherefrom an intent can be derived.
+the input can be of one or multiple. Do for each!
+
+Example:
+
+INTENT:
+"FAQ"
+POSSIBLE ARTEFACTS DESCRIBING THE INTENT:
+- "How do I check the balance on my bank Visa Debit Card?",
+- "Can I transfer money from my account to an account at another financial institution?",
+- "Can I join the bank online?",
+- "How do I find my tax statements?",
+- "Can I access my tax forms online?",
+- "Bank information",
+- "If I lose my debit or credit card, what should I do?",
+- "My card was lost/stolen, what should I do?",
+- "How do I activate my credit card?"
+
+input:
+{{$input}}
+-------------
+
+Rules:
+- DON'T add extra feedback, but the JSON.  
+- keep it simple with json.
+
+please create the artefacts and return them in json format: 
+{"FAQ":
+                [
+                    "How do I check the balance on my bank Visa Debit Card?",
+                    "Can I transfer money from my account to an account at another financial institution?",
+                    "Can I join the bank online?",
+                    "How do I find my tax statements?",
+                    "Can I access my tax forms online?",
+                    "Bank information",
+                    "If I lose my debit or credit card, what should I do?",
+                    "My card was lost/stolen, what should I do?",
+                    "How do I activate my credit card?"
+                ]
+}

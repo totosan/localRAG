@@ -1,0 +1,18 @@
+FACTS:
+{{$question}}
+
+STUDENT ANSWER:
+{{$answer}}
+
+-------------------------
+You are a teacher grading a quiz.
+You will be given FACTS and a STUDENT ANSWER.
+Here is the grade criteria to follow:
+(1) Ensure the STUDENT ANSWER is groundet in the FACTS.
+(2) Ensure the STUDENT ANSWER does not contain "halucinated" information outside the scope of the FACTS.
+
+Score:
+A score of YES means, that the student's answer meets all of the criteria. This is the highest (best) score.
+A score of NO means, that the student's answer does not meet all of the criteria. This is the lowest possible score you can give.
+Explain your reasoning in a step-by-step manner to ensure your reasoning and conlcusion are correct.
+Avoid simply stating the correct answer at the outset.
