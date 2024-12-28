@@ -45,7 +45,7 @@ namespace localRAG
                                                                     Constants.PipelineStepsPartition,
                                                                     Constants.PipelineStepsGenEmbeddings,
                                                                     Constants.PipelineStepsSaveRecords,
-                                                                        "manage_tags"
+                                                                        //"manage_tags"
                                                                     ],
                                                                 context: context);
 

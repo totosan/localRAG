@@ -89,7 +89,7 @@ namespace localRAG
             // Load the Kernel Memory plugin into Semantic Kernel.
             var memoryConnector = Helpers.GetMemoryConnector<MemoryServerless>(serverless: true, useAzure: true);
             memoryConnector.Orchestrator.AddHandler<GenerateTocHandler>("generate_tags"); // this adds tags according to its content
-            memoryConnector.Orchestrator.AddHandler<ManageTagHandler>("manage_tags"); // this adds tags according to its content
+            //memoryConnector.Orchestrator.AddHandler<ManageTagHandler>("manage_tags"); 
 
 
             // =======================
@@ -108,31 +108,11 @@ namespace localRAG
             // ==================================
             // === LOAD DOCUMENTS INTO MEMORY ===
             // ==================================
-            
-            var tags = await Helpers.LoadAndStorePdfFromPath(memoryConnector, IMPORT_PATH);
-            // I want to have each distinct tag as a list of tags / the key itself is also a tag
-            var listOfTags = new Dictionary<string, List<string>>();
-            foreach (var tag in tags)
-            {
-                if (!listOfTags.ContainsKey(tag.Key))
-                {
-                    listOfTags[tag.Key] = new List<string>();
-                }
-                foreach (var value in tag.Value)
-                {
-                    if (!listOfTags.ContainsKey(value))
-                    {
-                        listOfTags[value] = new List<string>();
-                    }
-                }
-            }
-            var result = await kernel.InvokeAsync<string>(prompts["IntentsPlugin"],new() { ["input"] = JsonSerializer.Serialize(listOfTags) });
-            var intentListWithQuestions = result.Replace("```json\n", "").Replace("```", "").Trim();
-            var tagCollection = JsonSerializer.Deserialize<Dictionary<string,List<string?>>>(intentListWithQuestions);
-           // await Helpers.CreateIntents(memoryConnector, tagCollection);
-           await memoryConnector.ImportTextAsync(JsonSerializer.Serialize(tagCollection), "tags.json",new TagCollection(){ {"intent","collection"} },index: "intent");
-           
-            
+
+
+            await ImportDocuments(kernel, memoryConnector, prompts);
+
+
             // ==============================================
             // ===                RUN THE CHAT            ===
             // ==============================================
@@ -173,6 +153,10 @@ namespace localRAG
                                     Console.WriteLine("Deleting Index: " + index.Name);
                                     await memoryConnector.DeleteIndexAsync(index.Name);
                                 }
+                                continue;
+                            case "/reimport":
+                            case "/im":
+                                await ImportDocuments(kernel, memoryConnector, prompts);
                                 continue;
                             case "/h":
                             case "/help":
@@ -224,5 +208,28 @@ namespace localRAG
 
         }
 
+        private static async Task ImportDocuments(Kernel kernel, MemoryServerless memoryConnector, KernelPlugin prompts)
+        {
+            var tags = await Helpers.LoadAndStorePdfFromPath(memoryConnector, IMPORT_PATH);
+            // I want to have each distinct tag as a list of tags / the key itself is also a tag
+            var listOfTags = new Dictionary<string, List<string>>();
+            foreach (var tag in tags)
+            {
+                if (!listOfTags.ContainsKey(tag.Key))
+                {
+                    listOfTags[tag.Key] = new List<string>();
+                }
+                foreach (var value in tag.Value)
+                {
+                    if (!listOfTags.ContainsKey(value))
+                    {
+                        listOfTags[value] = new List<string>();
+                    }
+                }
+            }
+            var result = await kernel.InvokeAsync<string>(prompts["IntentsPlugin"], new() { ["input"] = JsonSerializer.Serialize(listOfTags) });
+            var intentListWithQuestions = result.Replace("```json\n", "").Replace("```", "").Trim();
+            var tagCollection = JsonSerializer.Deserialize<Dictionary<string, List<string?>>>(intentListWithQuestions);
+        }
     }
 }

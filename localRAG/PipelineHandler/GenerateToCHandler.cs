@@ -27,6 +27,7 @@ public sealed class GenerateTocHandler : IPipelineStepHandler
     private readonly IPipelineOrchestrator _orchestrator;
     private readonly ILogger<GenerateTocHandler> _log;
     private readonly string _tocPrompt;
+    private Dictionary<string, Dictionary<string, List<string>>> _mainTags;
 
     /// <inheritdoc />
     public string StepName { get; }
@@ -53,15 +54,19 @@ public sealed class GenerateTocHandler : IPipelineStepHandler
         promptProvider ??= new EmbeddedPromptProvider();
 #pragma warning restore KMEXP00 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         this._tocPrompt = """
-        Analysiere den Inhalt des Dokuments, um die relevanten Kategorien zu identifizieren. Berücksichtige, dass das Dokument, wenn es verstaut ist, von jemanden wieder gefunden werden soll. Beantworte die Aufgabe unter Berücksichtigung einer effizienten Suche.
+        List of tags to sort documents in a library:
+        {{$tags}}
+        --------------
+        Analyze the content of the document to identify relevant categories/tags that describe the content. 
+        Chose a main category and maximum of three subcategories of the main tag for this document that I can use to organize it in a library. 
 
-        Anschließend generiere mir zu diesem Dokument drei TAGs, mit denen ich es in einer Bibliothek organisieren kann.
+        Example Doc:
+        "Diese Haus wurde aus verschiedenen Substanzen zusammengesetzt. Es benötigt daher unterschiedliche Materialien zur Instandhaltung. Diese sind zum einen Holz, Mörtel, Fassadenfarbe und diverse Weitere."
 
-        Beachte folgendes:
-        (Die TAGs sind hierarchisch)
-        TAG 1: allgemeine Kategorie (welchen Bereich deckt das Dokument ab? Arbeit und Beruf, Fahrzeuge, Finanzen und Steuern, Gesundheit, Persönliche Dokumente, Versicherungen, Wohnen oder Immobilien, IT)
-        TAG 2: Unterkategorie (aus den Allgemeinen)
-        TAG 3: speziell - beschreibende Kategorie
+        Example Choice:
+            "Property & Real Estate": ["Baupläne", "Abnahmeprotokolle"],
+            "Houhold & Utilities": ["Wartungsunterlagen"]
+
         --------------
         Content: 
         {{$input}}
@@ -69,23 +74,19 @@ public sealed class GenerateTocHandler : IPipelineStepHandler
         ---------------
 
         OUTPUT:
-        gib lediglich die TAGs sortiert von allgemein nach speziell aus. Verwende das JSON Format. Verwende nur die Englische Sprache!
-        e.g. you found following tags:
-        TAG1: Finance and Taxes
-        TAG2: FinTech
-        TAG3: Softwaredevelopment and agile
-
-        -> Transforms to JSON:
-        {
-        "Finance and Taxes": ["FinTech"],
-        "FinTech": ["Software Development“,“agile"]
-        }
-        Vermeide Beschreibungen, Erläuterungen, Analyseergebnisse. Gib JSON als Antwort zurück.
+        ONLY the Categories sorted from general to specific. Use ONLY the JSON format. Only use the categories, from the given list, that describe the document!
+        NO descriptions, explanations, analysis results or extra notes. 
         """;
 
         this._log = (loggerFactory ?? DefaultLogger.Factory).CreateLogger<GenerateTocHandler>();
 
         this._log.LogInformation("Handler '{0}' ready", stepName);
+
+        IEnumerable<KeyValuePair<string, string>> ENV = DotNetEnv.Env.Load(".env");
+        var tagsFile = Helpers.EnvVar("TAGS_COLLECTION_FILE") ?? throw new Exception("TAGS not found in .env file");
+        var tagsFileText = File.ReadAllTextAsync(tagsFile).GetAwaiter().GetResult();
+        this._mainTags = JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, List<string>>>>(tagsFileText);
+
     }
 
     /// <inheritdoc />
@@ -264,7 +265,8 @@ public sealed class GenerateTocHandler : IPipelineStepHandler
                 string paragraph = paragraphs[index];
                 this._log.LogTrace("Summarizing paragraph {0}", index);
 
-                var filledPrompt = summarizationPrompt.Replace("{{$input}}", paragraph, StringComparison.OrdinalIgnoreCase);
+                var tagtext = TransformTagsToString();
+                var filledPrompt = summarizationPrompt.Replace("{{$tags}}", tagtext).Replace("{{$input}}", paragraph, StringComparison.OrdinalIgnoreCase);
                 await foreach (string token in textGenerator.GenerateTextAsync(filledPrompt, new TextGenerationOptions()).ConfigureAwait(false))
                 {
                     newContent.Append(token);
@@ -293,5 +295,20 @@ public sealed class GenerateTocHandler : IPipelineStepHandler
         }
 
         return (content, true);
+    }
+
+    private string TransformTagsToString()
+    {
+        List<string> result = new List<string>();
+
+        foreach (var mainTag in _mainTags)
+        {
+            string mainTagName = mainTag.Key;
+            List<string> subTags = mainTag.Value.Keys.ToList();
+
+            result.Add($"[{mainTagName}: {string.Join(", ", subTags)}]\n");
+        }
+
+        return string.Join(", ", result);
     }
 }
