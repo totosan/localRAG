@@ -20,12 +20,12 @@ using Microsoft.KernelMemory.Prompts;
 
 namespace Microsoft.KernelMemory.Handlers;
 
-public sealed class GenerateTocHandler : IPipelineStepHandler
+public sealed class GenerateTagsHandler : IPipelineStepHandler
 {
     private const int MinLength = 30;
 
     private readonly IPipelineOrchestrator _orchestrator;
-    private readonly ILogger<GenerateTocHandler> _log;
+    private readonly ILogger<GenerateTagsHandler> _log;
     private readonly string _tocPrompt;
     private Dictionary<string, Dictionary<string, List<string>>> _mainTags;
 
@@ -41,7 +41,7 @@ public sealed class GenerateTocHandler : IPipelineStepHandler
     /// <param name="orchestrator">Current orchestrator used by the pipeline, giving access to content and other helps.</param>
     /// <param name="promptProvider">Class responsible for providing a given prompt</param>
     /// <param name="loggerFactory">Application logger factory</param>
-    public GenerateTocHandler(
+    public GenerateTagsHandler(
         string stepName,
         IPipelineOrchestrator orchestrator,
         IPromptProvider? promptProvider = null,
@@ -57,7 +57,7 @@ public sealed class GenerateTocHandler : IPipelineStepHandler
         List of tags to sort documents in a library:
         {{$tags}}
         --------------
-        Analyze the content of the document to identify relevant categories/tags that describe the content. 
+        Analyze the content of the document to identify relevant categories describing the content. 
         Chose a main category and maximum of three subcategories of the main tag for this document that I can use to organize it in a library. 
 
         Example Doc:
@@ -65,7 +65,7 @@ public sealed class GenerateTocHandler : IPipelineStepHandler
 
         Example Choice:
             "Property & Real Estate": ["Baupläne", "Abnahmeprotokolle"],
-            "Houhold & Utilities": ["Wartungsunterlagen"]
+            "Houshold & Utilities": ["Wartungsunterlagen"]
 
         --------------
         Content: 
@@ -74,11 +74,23 @@ public sealed class GenerateTocHandler : IPipelineStepHandler
         ---------------
 
         OUTPUT:
-        ONLY the Categories sorted from general to specific. Use ONLY the JSON format. Only use the categories, from the given list, that describe the document!
-        NO descriptions, explanations, analysis results or extra notes. 
+        Take the best fitting categories from the list above, the document can be sorted into! DON'T use categories that are NOT in the list.
+        In case you can't find any fitting category, return :
+        {
+            "suggestion": ["SUGFGESTION1", "SUGGESTION2", ...]
+        }
+        Just answer in JSON format. Don't NO add descriptions, explanations, analysis results or extra notes. 
+
+        Example Output:
+        ```json
+        {
+            "Property & Real Estate": ["Baupläne", "Abnahmeprotokolle"],
+            "Houshold & Utilities": ["Wartungsunterlagen"]
+        }
+        ```
         """;
 
-        this._log = (loggerFactory ?? DefaultLogger.Factory).CreateLogger<GenerateTocHandler>();
+        this._log = (loggerFactory ?? DefaultLogger.Factory).CreateLogger<GenerateTagsHandler>();
 
         this._log.LogInformation("Handler '{0}' ready", stepName);
 
@@ -134,6 +146,14 @@ public sealed class GenerateTocHandler : IPipelineStepHandler
                                 var tags = JsonSerializer.Deserialize<IDictionary<string, List<string?>>>(summary);
                                 foreach (var tag in tags)
                                 {
+                                    if (tag.Key == "suggestion")
+                                    {
+                                        Console.WriteLine("Suggestion: ");
+                                        foreach (var suggestion in tag.Value)
+                                        {
+                                            Console.WriteLine(suggestion);
+                                        }
+                                    }
                                     pipeline.Tags.Add(tag.Key, tag.Value);
                                 }
                             }

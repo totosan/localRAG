@@ -10,12 +10,13 @@ using Microsoft.KernelMemory.DocumentStorage.DevTools;
 using Microsoft.KernelMemory.MemoryStorage.DevTools;
 using Microsoft.KernelMemory.Diagnostics;
 using Microsoft.KernelMemory.MongoDbAtlas;
-using Newtonsoft.Json;
 using Amazon.Runtime.Internal.Endpoints.StandardLibrary;
 using localRAG.Models;
 using NetTopologySuite.Utilities;
 using Microsoft.KernelMemory.DataFormats.Office;
 using System.Globalization;
+using System.Text.Json;
+using Amazon.S3.Model;
 
 namespace localRAG
 {
@@ -51,49 +52,121 @@ namespace localRAG
 
                 }
 
-                var pipeline = await memoryConnector.GetDocumentStatusAsync(fileId);
-                Console.WriteLine($"Document {file} is being processed");
-                //write all tags from pipleline
-                foreach (var tag in pipeline.Tags)
-                {
-                    var tagValue = string.Join(", ", tag.Value);
-                    Console.WriteLine($"\tTag: {tag.Key} Value: {tagValue}");
-                }
-                foreach (var tag in pipeline.Tags)
-                {
-                    if (tags.Keys.Any(k => k == tag.Key))
-                    {
-                        // all values of tag with this key to the tags list with the same key, with distinct values
-                        tags[tag.Key] = tags[tag.Key].Union(tag.Value).ToList();
-                    }
-                    else
-                    {
-                        tags.Add(tag);
-                    }
-                }
+                //tags = await GetTagsFromDocumentById(memoryConnector, file, fileId);
             }
             return tags;
         }
 
-        public static async Task CreateIntents(IKernelMemory memoryConnector, Dictionary<string, List<string>> intentSamples)
+        private static async Task<TagCollection> GetTagsFromDocumentById(IKernelMemory memoryConnector, string? file, string fileId)
         {
-            foreach (KeyValuePair<string, List<string>> intentSample in intentSamples)
+            TagCollection tags = new TagCollection();
+            var pipeline = await memoryConnector.GetDocumentStatusAsync(fileId);
+            Console.WriteLine($"Document {file} is being processed");
+            //write all tags from pipleline
+            foreach (var tag in pipeline.Tags)
             {
-                foreach (string intentRequest in intentSample.Value)
+                var tagValue = string.Join(", ", tag.Value);
+                Console.WriteLine($"\tTag: {tag.Key} Value: {tagValue}");
+            }
+            foreach (var tag in pipeline.Tags)
+            {
+                if (tags.Keys.Any(k => k == tag.Key))
                 {
-                    var docId = HashThis(intentRequest);
-                    if (await memoryConnector.IsDocumentReadyAsync(docId))
-                    {
-                        continue;
-                    }
+                    // all values of tag with this key to the tags list with the same key, with distinct values
+                    tags[tag.Key] = tags[tag.Key].Union(tag.Value).ToList();
+                }
+                else
+                {
+                    tags.Add(tag);
+                }
+            }
 
-                    Console.WriteLine($"Uploading intent {intentSample.Key} with question: {intentRequest}");
-                    await memoryConnector.ImportTextAsync(intentRequest, tags: new TagCollection() { { "intent", intentSample.Key } }, documentId: docId, index: "intent");
-                    Console.WriteLine($"- Document Id: {docId}");
+            return tags;
+        }
+
+        public static async Task CreateIntents(IKernelMemory memoryConnector, DocumentCategories intentSamples)
+        {
+            foreach(var category in intentSamples.Categories){
+                foreach(var sub in category.Value.Subcategories){
+                    foreach(var question in sub.Value.Questions){
+                        var docId = HashThis(question);
+                        if(await memoryConnector.IsDocumentReadyAsync(docId)){
+                            return;
+                        }
+
+                        Console.WriteLine($"Uploading intent {sub.Key} with question: {question}");
+                        await memoryConnector.ImportTextAsync(question, tags: new TagCollection(){{"intent", sub.Key},{"mainintent",category.Key}}, documentId: docId, index: "intent");
+                        Console.WriteLine($"- Document Id: {docId}");
+                    }
                 }
             }
         }
+        public static async Task<List<string>> AskForIntent(string request, IKernelMemory s_memory)
+        {
+            Console.WriteLine($"Question: {request}");
 
+            // we ask for one chank of data with a minimum relevance of 0.75
+            SearchResult answer = await s_memory.SearchAsync(request, index: "intent", minRelevance: 0.50, limit: 3);
+            List<string> intents = new List<string>();
+            foreach(Citation result in answer.Results){
+               intents.Add(GetTagValue(result, "intent", "none"));
+            }
+            Console.WriteLine($"Intents: {string.Join(", ", intents)}");
+            Console.WriteLine("-------------------------------------------------");
+            return  intents;
+        }
+        public static string? GetTagValue(Citation answer, string tagName, string? defaultValue = null)
+        {
+            if (answer == null)
+            {
+                return defaultValue;
+            }
+
+            if (answer.Partitions[0].Tags.ContainsKey(tagName))
+            {
+                return answer.Partitions[0].Tags[tagName][0];
+            }
+
+
+            return defaultValue;
+        }
+
+        public static async Task<DocumentCategories> ReadTagsFromFile()
+        {
+            IEnumerable<KeyValuePair<string, string>> ENV = DotNetEnv.Env.Load(".env");
+            var tagsFile = Helpers.EnvVar("TAGS_COLLECTION_FILE") ?? throw new Exception("TAGS not found in .env file");
+            var tagsFileText = await File.ReadAllTextAsync(tagsFile);
+            // Deserialize the JSON into a dictionary
+            var rawCategories = JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, List<string>>>>(tagsFileText);
+
+            // Create a new instance of DocumentCategories
+            var documentCategories = new DocumentCategories();
+
+            // Loop through the dictionary and populate the DocumentCategories instance
+            foreach (var category in rawCategories)
+            {
+                var documentCategory = new DocumentCategory();
+                foreach (var subcategory in category.Value)
+                {
+                    var documentQuestions = new DocumentQuestions { Questions = subcategory.Value };
+                    documentCategory.Subcategories[subcategory.Key] = documentQuestions;
+                }
+                documentCategories.Categories[category.Key] = documentCategory;
+            }
+
+            return documentCategories;
+        }
+
+        public static async Task RemoveAllIndexs(IKernelMemory memoryConnector)
+        {
+            var indexes = await memoryConnector.ListIndexesAsync();
+            Console.WriteLine($"Found {indexes.Count()} indexes");
+            foreach (var index in indexes)
+            {
+                Console.WriteLine("Deleting Index: " + index.Name);
+                await memoryConnector.DeleteIndexAsync(index.Name);
+            }
+        }
 
         /// <summary>
         /// Retrieves long-term memory based on the provided query.
@@ -102,12 +175,23 @@ namespace localRAG
         /// <param name="query">The query string to search for in the memory.</param>
         /// <param name="asChunks">A boolean indicating whether to fetch the memory as chunks or not. Default is true.</param>
         /// <returns>A task that represents the asynchronous operation. The task result contains the retrieved memory as a string.</returns>
-        public static async Task<string> GetLongTermMemory(IKernelMemory memory, string query, bool asChunks = true)
+        public static async Task<string> GetLongTermMemory(IKernelMemory memory, string query, bool asChunks = true, List<string> intents = null)
         {
             if (asChunks)
             {
                 // Fetch raw chunks, using KM indexes. More tokens to process with the chat history, but only one LLM request.
-                SearchResult memories = await memory.SearchAsync(query, minRelevance: 0.25, limit: 5);
+                List<MemoryFilter> filters = new List<MemoryFilter>();
+                SearchResult memories = new SearchResult();
+                if(intents != null)
+                {
+                    foreach (var intent in intents)
+                    {
+                        filters.Add(MemoryFilters.ByTag("intent", intent));
+                    }
+                    memories = await memory.SearchAsync(query, minRelevance: 0.25, limit: 5, filters: filters);
+                }else{
+                    memories = await memory.SearchAsync(query, minRelevance: 0.25, limit: 5);
+                }
                 List<SortedDictionary<int, Citation.Partition>> partCollection = await GetAdjacentChunks(memory, memories);
                 var documents = new List<DocumentsSimple>();
                 if (memories.Results.Count > 0)
@@ -130,7 +214,7 @@ namespace localRAG
                     }
                     //return partCollection.SelectMany(p => p.Values).Aggregate("", (sum, chunk) => sum + chunk.Text + "\n").Trim();
                     //return memories.Results.SelectMany(m => m.Partitions).Aggregate("", (sum, chunk) => sum + chunk.Text + "\n").Trim();
-                    return JsonConvert.SerializeObject(documents);
+                    return JsonSerializer.Serialize(documents);
                 }
             }
             Console.WriteLine("Did an ASK");
@@ -200,6 +284,8 @@ namespace localRAG
 
             return kernel;
         }
+
+        
         public static T GetMemoryConnector<T>(bool serverless = false, bool useAzure = false) where T : IKernelMemory
         {
             if (!serverless)
@@ -235,9 +321,9 @@ namespace localRAG
                     //.WithSimpleFileStorage(SimpleFileStorageConfig.Persistent)
                     //.WithSimpleTextDb(SimpleTextDbConfig.Persistent)
                     //.WithSimpleVectorDb(SimpleVectorDbConfig.Persistent)
-                    .WithCustomImageOcr(new TesseractOCR())
                     // use the dateformat schema from '2010-04-16T10:00:00.000Z'
-                    .With(new MsExcelDecoderConfig { DateFormat = "yyyy-MM-ddTHH:mm:ss.fffZ", DateFormatProvider = CultureInfo.InvariantCulture })
+                    //.With(new MsExcelDecoderConfig { DateFormat = "yyyy-MM-ddTHH:mm:ss.fffZ", DateFormatProvider = CultureInfo.InvariantCulture })
+                    .WithCustomImageOcr(new TesseractOCR())
                     .WithContentDecoder<CustomPdfDecoder>()
                     .Build<MemoryServerless>();
             }
@@ -256,32 +342,6 @@ namespace localRAG
                 .WithOllamaTextEmbeddingGeneration(config, new CL100KTokenizer())
                 .Build();
             }
-        }
-        public static async Task AskForIntent(string request, IKernelMemory s_memory)
-        {
-            Console.WriteLine($"Question: {request}");
-
-            // we ask for one chank of data with a minimum relevance of 0.75
-            SearchResult answer = await s_memory.SearchAsync(request, minRelevance: 0.75, limit: 1);
-            string? intent = GetTagValue(answer.Results.FirstOrDefault(), "intent", "none");
-            Console.WriteLine($"Intent: {intent}");
-
-            Console.WriteLine("\n====================================\n");
-        }
-        public static string? GetTagValue(Citation answer, string tagName, string? defaultValue = null)
-        {
-            if (answer == null)
-            {
-                return defaultValue;
-            }
-
-            if (answer.Partitions[0].Tags.ContainsKey(tagName))
-            {
-                return answer.Partitions[0].Tags[tagName][0];
-            }
-
-
-            return defaultValue;
         }
         public static string HashThis(string value)
         {

@@ -249,6 +249,22 @@
       "Gerichtsbeschluss"
     ]
   },
+  "Ordnungswiedrigkeiten": {
+    "Bußgeldbescheide": [
+      "Was ist ein Bußgeldbescheid?",
+      "Wie lege ich Einspruch gegen einen Bußgeldbescheid ein?",
+      "Wie bezahle ich einen Bußgeldbescheid?",
+      "Wie lange habe ich Zeit, um einen Bußgeldbescheid zu bezahlen?",
+      "Bußgeldbescheid"
+    ],
+    "Verwarnungen": [
+      "Was ist eine Verwarnung?",
+      "Wie gehe ich mit einer Verwarnung um?",
+      "Kann ich gegen eine Verwarnung Einspruch einlegen?",
+      "Wie lange ist eine Verwarnung gültig?",
+      "Verwarnung"
+    ]
+  },
   "Household & Utilities": {
     "Strom-/Wasser-/Gasrechnungen": [
       "Wie hoch sind meine Strom-/Wasser-/Gasrechnungen?",

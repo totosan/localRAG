@@ -44,6 +44,7 @@ namespace localRAG
         {
             IEnumerable<KeyValuePair<string, string>> ENV = DotNetEnv.Env.Load(".env");
             IMPORT_PATH = Helpers.EnvVar("IMPORT_PATH") ?? throw new Exception("IMPORT_PATH not found in .env file");
+
             // ==================================
             // ===          SETUP LOGGING     ===
             // ==================================
@@ -88,7 +89,7 @@ namespace localRAG
 
             // Load the Kernel Memory plugin into Semantic Kernel.
             var memoryConnector = Helpers.GetMemoryConnector<MemoryServerless>(serverless: true, useAzure: true);
-            memoryConnector.Orchestrator.AddHandler<GenerateTocHandler>("generate_tags"); // this adds tags according to its content
+            memoryConnector.Orchestrator.AddHandler<GenerateTagsHandler>("generate_tags"); // this adds tags according to its content
             //memoryConnector.Orchestrator.AddHandler<ManageTagHandler>("manage_tags"); 
 
 
@@ -138,6 +139,7 @@ namespace localRAG
                     {
                         switch (userMessage.ToLower())
                         {
+                            case "/q":
                             case "/exit":
                                 return;
                             case "/clear":
@@ -146,24 +148,25 @@ namespace localRAG
                                 continue;
                             case "/ri":
                             case "/removeindex":
-                                var indexes = await memoryConnector.ListIndexesAsync();
-                                Console.WriteLine($"Found {indexes.Count()} indexes");
-                                foreach (var index in indexes)
-                                {
-                                    Console.WriteLine("Deleting Index: " + index.Name);
-                                    await memoryConnector.DeleteIndexAsync(index.Name);
-                                }
+                                await Helpers.RemoveAllIndexs(memoryConnector);
                                 continue;
                             case "/reimport":
                             case "/im":
                                 await ImportDocuments(kernel, memoryConnector, prompts);
                                 continue;
+                            case "/gi":
+                            case "/GenerateIntents":
+                                var tags = await Helpers.ReadTagsFromFile();
+
+                                await Helpers.CreateIntents(memoryConnector, tags);
+                                continue;
                             case "/h":
                             case "/help":
                                 Console.WriteLine("Commands:");
-                                Console.WriteLine("/exit - Exit the program");
-                                Console.WriteLine("/clear - Clear the chat history");
-                                Console.WriteLine("/removeIndex - Delete all indexes");
+                                Console.WriteLine("\t/exit - Exit the program");
+                                Console.WriteLine("\t/clear - Clear the chat history");
+                                Console.WriteLine("\t/removeIndex - Delete all indexes");
+                                Console.WriteLine("\t/reimport - Reimport all documents");
                                 continue;
                             default:
                                 Console.WriteLine("Unknown command. Type /help for a list of commands.");
@@ -176,10 +179,12 @@ namespace localRAG
                 //var intent = Helpers.AskForIntent(userMessage, memoryConnector);
                 if (true)
                 {
+                    var intents = await Helpers.AskForIntent(userMessage, memoryConnector);
+
                     // === ASK MEMORY ===================
                     // Recall relevant information from memory
                     // ==================================
-                    var longTermMemory = await Helpers.GetLongTermMemory(memoryConnector, userMessage);
+                    var longTermMemory = await Helpers.GetLongTermMemory(memoryConnector, userMessage, intents: intents);
                     //Console.WriteLine($"-------------------------- recall from memory\n{longTermMemory}\n--------------------------");
 
                     // Inject the memory recall in the initial system message
@@ -211,25 +216,27 @@ namespace localRAG
         private static async Task ImportDocuments(Kernel kernel, MemoryServerless memoryConnector, KernelPlugin prompts)
         {
             var tags = await Helpers.LoadAndStorePdfFromPath(memoryConnector, IMPORT_PATH);
-            // I want to have each distinct tag as a list of tags / the key itself is also a tag
-            var listOfTags = new Dictionary<string, List<string>>();
-            foreach (var tag in tags)
-            {
-                if (!listOfTags.ContainsKey(tag.Key))
+            if (false)
+            {            // I want to have each distinct tag as a list of tags / the key itself is also a tag
+                var listOfTags = new Dictionary<string, List<string>>();
+                foreach (var tag in tags)
                 {
-                    listOfTags[tag.Key] = new List<string>();
-                }
-                foreach (var value in tag.Value)
-                {
-                    if (!listOfTags.ContainsKey(value))
+                    if (!listOfTags.ContainsKey(tag.Key))
                     {
-                        listOfTags[value] = new List<string>();
+                        listOfTags[tag.Key] = new List<string>();
+                    }
+                    foreach (var value in tag.Value)
+                    {
+                        if (!listOfTags.ContainsKey(value))
+                        {
+                            listOfTags[value] = new List<string>();
+                        }
                     }
                 }
+                var result = await kernel.InvokeAsync<string>(prompts["IntentsPlugin"], new() { ["input"] = JsonSerializer.Serialize(listOfTags) });
+                var intentListWithQuestions = result.Replace("```json\n", "").Replace("```", "").Trim();
+                var tagCollection = JsonSerializer.Deserialize<Dictionary<string, List<string?>>>(intentListWithQuestions);
             }
-            var result = await kernel.InvokeAsync<string>(prompts["IntentsPlugin"], new() { ["input"] = JsonSerializer.Serialize(listOfTags) });
-            var intentListWithQuestions = result.Replace("```json\n", "").Replace("```", "").Trim();
-            var tagCollection = JsonSerializer.Deserialize<Dictionary<string, List<string?>>>(intentListWithQuestions);
         }
     }
 }
