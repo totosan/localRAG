@@ -17,6 +17,7 @@ using System.Diagnostics;
 using Microsoft.KernelMemory.Handlers;
 using System.Text.Json;
 using Azure.Search.Documents;
+using MongoDB.Driver.Linq;
 
 namespace localRAG
 {
@@ -104,14 +105,15 @@ namespace localRAG
             // create sk prompt for checking an AI chatresult for hallucinations
 
             var path = Path.Combine(Directory.GetCurrentDirectory(), "Plugins/Prompts");
-            var prompts = kernel.ImportPluginFromPromptDirectory(path, "IntentsPlugin");
+            var intentPrompts = kernel.ImportPluginFromPromptDirectory(path, "IntentsPlugin");
+            var rewriteUserAsk = kernel.ImportPluginFromPromptDirectory(path, "RewriteUserAskPlugin");
 
             // ==================================
             // === LOAD DOCUMENTS INTO MEMORY ===
             // ==================================
 
 
-            await ImportDocuments(kernel, memoryConnector, prompts);
+            await ImportDocuments(kernel, memoryConnector, intentPrompts);
 
 
             // ==============================================
@@ -152,7 +154,7 @@ namespace localRAG
                                 continue;
                             case "/reimport":
                             case "/im":
-                                await ImportDocuments(kernel, memoryConnector, prompts);
+                                await ImportDocuments(kernel, memoryConnector, intentPrompts);
                                 continue;
                             case "/gi":
                             case "/GenerateIntents":
@@ -179,6 +181,16 @@ namespace localRAG
                 //var intent = Helpers.AskForIntent(userMessage, memoryConnector);
                 if (true)
                 {
+                    if(chatHistory.Count()>2)
+                    {
+                        var lastDialogItems = chatHistory.TakeLast(3).Aggregate("", (acc, item) => acc + "\n"+item.Content);
+                        userMessage = lastDialogItems;
+                    }
+                    //TODO: make kernelGpt3.5 call, to reduce token and costs
+                    var userask = await kernel.InvokeAsync<string>(rewriteUserAsk["rewriteUserAskPlugin"], new() { ["question"] = userMessage });
+                    userask = userask.Replace("```json\n", "").Replace("```", "").Trim();
+                    var user_messages = JsonSerializer.Deserialize<List<UserAsk>>(userask);
+                    userMessage = user_messages.Last().StandaloneQuestion;
                     var intents = await Helpers.AskForIntent(userMessage, memoryConnector);
 
                     // === ASK MEMORY ===================

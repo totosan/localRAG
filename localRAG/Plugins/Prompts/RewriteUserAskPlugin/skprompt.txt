@@ -1,0 +1,13 @@
+What additional information do you need to retrieve to answer the user's questions below via RAG? Please output the additional information as a JSON list, containing the field "standalone_question", so that it can be separately similarity searched in my RAG process, without any extra context. 
+
+After data is retrieved for each question, the information will be provided back to you
+
+Output example:
+[
+    {
+        "StandaloneQuestion": "What is the biggest city in Germany?"
+    }
+]
+
+~~~ dialogue ~~~
+{{$question}}

@@ -39,16 +39,25 @@ namespace localRAG
                 var saved = await memoryConnector.IsDocumentReadyAsync(fileId);
                 if (!saved)
                 {
-                    var docid = await memoryConnector.ImportDocumentAsync(new Document(fileId)
-                                                                    .AddFile(file),
-                                                            steps: [Constants.PipelineStepsExtract,
-                                                                        "generate_tags",
-                                                                    Constants.PipelineStepsPartition,
-                                                                    Constants.PipelineStepsGenEmbeddings,
-                                                                    Constants.PipelineStepsSaveRecords,
-                                                                        //"manage_tags"
-                                                                    ],
-                                                                context: context);
+                    try
+                    {
+                        var docid = await memoryConnector.ImportDocumentAsync(new Document(fileId)
+                                                                        .AddFile(file),
+                                                                steps: [Constants.PipelineStepsExtract,
+                                                                            "generate_tags",
+                                                                        Constants.PipelineStepsPartition,
+                                                                        Constants.PipelineStepsGenEmbeddings,
+                                                                        Constants.PipelineStepsSaveRecords,
+                                                                            //"manage_tags"
+                                                                        ],
+                                                                    context: context);
+                        Console.WriteLine($"\nDocument {file} is being processed\n");
+                    }
+                    catch (System.Exception e)
+                    {
+                        Console.WriteLine($"Error processing file {file}");
+                        throw;
+                    }
 
                 }
 
@@ -86,16 +95,20 @@ namespace localRAG
 
         public static async Task CreateIntents(IKernelMemory memoryConnector, DocumentCategories intentSamples)
         {
-            foreach(var category in intentSamples.Categories){
-                foreach(var sub in category.Value.Subcategories){
-                    foreach(var question in sub.Value.Questions){
+            foreach (var category in intentSamples.Categories)
+            {
+                foreach (var sub in category.Value.Subcategories)
+                {
+                    foreach (var question in sub.Value.Questions)
+                    {
                         var docId = HashThis(question);
-                        if(await memoryConnector.IsDocumentReadyAsync(docId)){
+                        if (await memoryConnector.IsDocumentReadyAsync(docId))
+                        {
                             return;
                         }
 
                         Console.WriteLine($"Uploading intent {sub.Key} with question: {question}");
-                        await memoryConnector.ImportTextAsync(question, tags: new TagCollection(){{"intent", sub.Key},{"mainintent",category.Key}}, documentId: docId, index: "intent");
+                        await memoryConnector.ImportTextAsync(question, tags: new TagCollection() { { "intent", sub.Key }, { "mainintent", category.Key } }, documentId: docId, index: "intent");
                         Console.WriteLine($"- Document Id: {docId}");
                     }
                 }
@@ -108,12 +121,13 @@ namespace localRAG
             // we ask for one chank of data with a minimum relevance of 0.75
             SearchResult answer = await s_memory.SearchAsync(request, index: "intent", minRelevance: 0.50, limit: 3);
             List<string> intents = new List<string>();
-            foreach(Citation result in answer.Results){
-               intents.Add(GetTagValue(result, "intent", "none"));
+            foreach (Citation result in answer.Results)
+            {
+                intents.Add(GetTagValue(result, "intent", "none"));
             }
             Console.WriteLine($"Intents: {string.Join(", ", intents)}");
             Console.WriteLine("-------------------------------------------------");
-            return  intents;
+            return intents;
         }
         public static string? GetTagValue(Citation answer, string tagName, string? defaultValue = null)
         {
@@ -182,14 +196,16 @@ namespace localRAG
                 // Fetch raw chunks, using KM indexes. More tokens to process with the chat history, but only one LLM request.
                 List<MemoryFilter> filters = new List<MemoryFilter>();
                 SearchResult memories = new SearchResult();
-                if(intents != null)
+                if (intents != null)
                 {
                     foreach (var intent in intents)
                     {
                         filters.Add(MemoryFilters.ByTag("intent", intent));
                     }
                     memories = await memory.SearchAsync(query, minRelevance: 0.25, limit: 5, filters: filters);
-                }else{
+                }
+                else
+                {
                     memories = await memory.SearchAsync(query, minRelevance: 0.25, limit: 5);
                 }
                 List<SortedDictionary<int, Citation.Partition>> partCollection = await GetAdjacentChunks(memory, memories);
@@ -212,6 +228,7 @@ namespace localRAG
                             documents.Add(doc);
                         }
                     }
+                    
                     //return partCollection.SelectMany(p => p.Values).Aggregate("", (sum, chunk) => sum + chunk.Text + "\n").Trim();
                     //return memories.Results.SelectMany(m => m.Partitions).Aggregate("", (sum, chunk) => sum + chunk.Text + "\n").Trim();
                     return JsonSerializer.Serialize(documents);
@@ -285,7 +302,7 @@ namespace localRAG
             return kernel;
         }
 
-        
+
         public static T GetMemoryConnector<T>(bool serverless = false, bool useAzure = false) where T : IKernelMemory
         {
             if (!serverless)
