@@ -12,7 +12,7 @@
   "input": {
     "parameters": [
       {
-        "name": "shortDioalog",
+        "name": "question",
         "description": "The short dialog to generate a follow up question for.",
         "defaultValue": ""
       }

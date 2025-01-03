@@ -1,13 +1,21 @@
-What additional information do you need to retrieve to answer the user's questions below via RAG? Please output the additional information as a JSON list, containing the field "standalone_question", so that it can be separately similarity searched in my RAG process, without any extra context. 
+What additional information do you need to retrieve to answer the user's questions below via RAG? Please output the additional information as a JSON list,
+containing the field "StandaloneQuestion", so that it can be separately similarity searched in my RAG process, without any extra context. 
+Please create the follow up ask of the last request!
+Hint: the data base, that is used is MongoDB Atlas. The data is stored in chunks and assigned to a document. It can be, that chunks a related to each other.
+Form te rewritten ask so, that it can be used wiht a LLM and MongoDB RAG system.
 
 After data is retrieved for each question, the information will be provided back to you
 
-Output example:
+Output format:
+
 [
     {
         "StandaloneQuestion": "What is the biggest city in Germany?"
     }
 ]
 
-~~~ dialogue ~~~
+--------------
+
+question:
+
 {{$question}}

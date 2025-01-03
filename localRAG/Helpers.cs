@@ -6,17 +6,11 @@ using Microsoft.KernelMemory;
 using Microsoft.KernelMemory.AI;
 using Microsoft.KernelMemory.AI.Ollama;
 using Microsoft.KernelMemory.Context;
-using Microsoft.KernelMemory.DocumentStorage.DevTools;
-using Microsoft.KernelMemory.MemoryStorage.DevTools;
-using Microsoft.KernelMemory.Diagnostics;
 using Microsoft.KernelMemory.MongoDbAtlas;
-using Amazon.Runtime.Internal.Endpoints.StandardLibrary;
 using localRAG.Models;
-using NetTopologySuite.Utilities;
-using Microsoft.KernelMemory.DataFormats.Office;
-using System.Globalization;
 using System.Text.Json;
-using Amazon.S3.Model;
+using Microsoft.Extensions.DependencyInjection;
+using DocumentFormat.OpenXml.Math;
 
 namespace localRAG
 {
@@ -119,14 +113,18 @@ namespace localRAG
             Console.WriteLine($"Question: {request}");
 
             // we ask for one chank of data with a minimum relevance of 0.75
-            SearchResult answer = await s_memory.SearchAsync(request, index: "intent", minRelevance: 0.50, limit: 3);
+            SearchResult answer = await s_memory.SearchAsync(request, index: "intent", minRelevance: 0.60, limit: 3);
             List<string> intents = new List<string>();
             foreach (Citation result in answer.Results)
             {
-                intents.Add(GetTagValue(result, "intent", "none"));
+                var retrievedIntents = GetTagValue(result, "intent", "none");
+                if(retrievedIntents!= null &&
+                     intents.Find(i => i == retrievedIntents) == null)
+                {
+                    intents.Add(retrievedIntents);
+                }
             }
-            Console.WriteLine($"Intents: {string.Join(", ", intents)}");
-            Console.WriteLine("-------------------------------------------------");
+
             return intents;
         }
         public static string? GetTagValue(Citation answer, string tagName, string? defaultValue = null)
@@ -191,6 +189,25 @@ namespace localRAG
         /// <returns>A task that represents the asynchronous operation. The task result contains the retrieved memory as a string.</returns>
         public static async Task<string> GetLongTermMemory(IKernelMemory memory, string query, bool asChunks = true, List<string> intents = null)
         {
+
+            var context = new RequestContext();
+            // Use a custom template for facts
+            context.SetArg("custom_rag_fact_template_str", "=== Last update: {{$meta[last_update]}} ===\n{{$content}}\n");
+
+            // Use a custom RAG prompt
+            context.SetArg("custom_rag_prompt_str", """
+                                                Facts:
+                                                {{$facts}}
+                                                ======
+                                                Given only the timestamped facts above, provide a very short answer, include the relevant dates in brackets.
+                                                If you don't have sufficient information, first reread the documents and try to gather the information derived from the context.
+                                                Example: asking for Beitragserhöhung can also be answerd, if the text just says '...die Preise wurden zum neuen Jahr angehoben.'
+                                                Second, if no reasonable context ore infromation can be found, reply with '{{$notFound}}'.
+                                                
+                                                Question: {{$input}}
+                                                Answer:
+                                                """);
+            var documents = new List<DocumentsSimple>();
             if (asChunks)
             {
                 // Fetch raw chunks, using KM indexes. More tokens to process with the chat history, but only one LLM request.
@@ -202,14 +219,13 @@ namespace localRAG
                     {
                         filters.Add(MemoryFilters.ByTag("intent", intent));
                     }
-                    memories = await memory.SearchAsync(query, minRelevance: 0.25, limit: 5, filters: filters);
+                    memories = await memory.SearchAsync(query, minRelevance: 0.4, limit: 3, filters: filters, context: context);
                 }
                 else
                 {
-                    memories = await memory.SearchAsync(query, minRelevance: 0.25, limit: 5);
+                    memories = await memory.SearchAsync(query, minRelevance: 0.4, limit: 3, context: context);
                 }
-                List<SortedDictionary<int, Citation.Partition>> partCollection = await GetAdjacentChunks(memory, memories);
-                var documents = new List<DocumentsSimple>();
+                //List<SortedDictionary<int, Citation.Partition>> partCollection = await GetAdjacentChunks(memory, memories);
                 if (memories.Results.Count > 0)
                 {
                     Console.WriteLine("Did a SEARCH");
@@ -223,22 +239,40 @@ namespace localRAG
                                 DocumentId = result.DocumentId,
                                 SourceName = result.SourceName,
                                 PartitionNumber = partition.PartitionNumber,
-                                Content = partition.Text
+                                Content = partition.Text,
+                                Score = partition.Relevance
                             };
                             documents.Add(doc);
                         }
                     }
-                    
+
                     //return partCollection.SelectMany(p => p.Values).Aggregate("", (sum, chunk) => sum + chunk.Text + "\n").Trim();
                     //return memories.Results.SelectMany(m => m.Partitions).Aggregate("", (sum, chunk) => sum + chunk.Text + "\n").Trim();
                     return JsonSerializer.Serialize(documents);
                 }
             }
+
             Console.WriteLine("Did an ASK");
             // Use KM to generate an answer. Fewer tokens, but one extra LLM request.
-            MemoryAnswer answer = await memory.AskAsync(query);
-            return answer.Result.Trim();
+            MemoryAnswer answer = await memory.AskAsync(query, minRelevance: 0.7, context: context);
+            foreach (var doc in answer.RelevantSources)
+            {
+                foreach (var part in doc.Partitions)
+                {
+                    var docsimple = new DocumentsSimple
+                    {
+                        DocumentId = doc.DocumentId,
+                        SourceName = doc.SourceName,
+                        PartitionNumber = part.PartitionNumber,
+                        Content = part.Text,
+                        Score = part.Relevance
+                    };
+                    documents.Add(docsimple);
+                }
+            }
+            return JsonSerializer.Serialize(documents);
         }
+
 
 
         private static async Task<List<SortedDictionary<int, Citation.Partition>>> GetAdjacentChunks(IKernelMemory memory, SearchResult memories)
@@ -287,18 +321,31 @@ namespace localRAG
         {
             return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(url))).ToUpperInvariant();
         }
-        public static Kernel GetSemanticKernel()
+        public static Kernel GetSemanticKernel(bool low = false)
         {
             Kernel kernel;
-            Console.WriteLine(Environment.GetEnvironmentVariable("AZURE_OPENAI_MODEL"));
-            kernel = Kernel.CreateBuilder()
-            .AddAzureOpenAIChatCompletion(
-                Environment.GetEnvironmentVariable("AZURE_OPENAI_MODEL")!,  // The name of your deployment (e.g., "text-davinci-003")
-                Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT")!,    // The endpoint of your Azure OpenAI service
-                Environment.GetEnvironmentVariable("AZURE_OPENAI_API_KEY")!      // The API key of your Azure OpenAI service
-            )
-            .Build();
-
+            if (!low)
+            {
+                Console.WriteLine(Environment.GetEnvironmentVariable("AZURE_OPENAI_MODEL"));
+                kernel = Kernel.CreateBuilder()
+                .AddAzureOpenAIChatCompletion(
+                    Environment.GetEnvironmentVariable("AZURE_OPENAI_MODEL")!,  // The name of your deployment (e.g., "text-davinci-003")
+                    Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT")!,    // The endpoint of your Azure OpenAI service
+                    Environment.GetEnvironmentVariable("AZURE_OPENAI_API_KEY")!      // The API key of your Azure OpenAI service
+                )
+                .Build();
+            }
+            else
+            {
+                Console.WriteLine(Environment.GetEnvironmentVariable("AZURE_OPENAI_MODEL_LOW"));
+                kernel = Kernel.CreateBuilder()
+                .AddAzureOpenAIChatCompletion(
+                    Environment.GetEnvironmentVariable("AZURE_OPENAI_MODEL_LOW")!,  // The name of your deployment (e.g., "text-davinci-003")
+                    Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT")!,    // The endpoint of your Azure OpenAI service
+                    Environment.GetEnvironmentVariable("AZURE_OPENAI_API_KEY")!      // The API key of your Azure OpenAI service
+                )
+                .Build();
+            }
             return kernel;
         }
 
@@ -317,7 +364,7 @@ namespace localRAG
                 mongoConfig.DatabaseName = EnvVar("MONGODB_DATABASE_NAME");
                 mongoConfig.WithSingleCollectionForVectorSearch(true);
 
-                return (T)(IKernelMemory)new KernelMemoryBuilder()
+                var kernel = new KernelMemoryBuilder()
                     .WithAzureOpenAITextEmbeddingGeneration(new AzureOpenAIConfig
                     {
                         APIType = AzureOpenAIConfig.APITypes.EmbeddingGeneration,
@@ -341,8 +388,12 @@ namespace localRAG
                     // use the dateformat schema from '2010-04-16T10:00:00.000Z'
                     //.With(new MsExcelDecoderConfig { DateFormat = "yyyy-MM-ddTHH:mm:ss.fffZ", DateFormatProvider = CultureInfo.InvariantCulture })
                     .WithCustomImageOcr(new TesseractOCR())
-                    .WithContentDecoder<CustomPdfDecoder>()
-                    .Build<MemoryServerless>();
+                    .WithContentDecoder<CustomPdfDecoder>();
+                kernel.Services.AddLogging(loggingBuilder =>
+                {
+                    loggingBuilder.AddConsole();
+                });
+                return (T)(IKernelMemory)kernel.Build<MemoryServerless>();
             }
             else
             {

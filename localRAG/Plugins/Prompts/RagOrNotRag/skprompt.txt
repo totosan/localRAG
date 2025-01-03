@@ -1,0 +1,31 @@
+Please classify the current users ask into a boolean answer. You have to find out, 
+if the ask is related to already existing data shared with the chat history or if RAG has to be used to bind more satisfying data in a database.
+If you decide to fetch data with RAG, answer True, if not answer with False. Just with True or False!
+
+If the chat history shows that it is just the first user ask, answer with True!
+
+Examples of a chat history:
+
+-- Example 1 --
+ RAG: False 
+Do you know, when the last update of prices has happend?
+Yes, on Dec 21st this year, the prices raised by 20%. This was, because the market economy changed drastically and forced companies to build buffers along the situation, that will happen in future.
+Thank you, can you tell me why?
+
+Your answer:
+False
+
+-- Example 2 --
+ RAG: True
+CAn you tell me, when Albert Eisntein was born?
+Sure, Albert Eisntein was born in March 14, 1879 in Ulm in Germany. 
+When was my birthdate ? 
+
+Yur Answer:
+True
+
+--------------
+
+question:
+
+{{$chat}}
