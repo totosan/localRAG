@@ -18,6 +18,8 @@ using Microsoft.KernelMemory.Handlers;
 using System.Text.Json;
 using Azure.Search.Documents;
 using MongoDB.Driver.Linq;
+using Microsoft.VisualBasic;
+using System.Collections;
 
 namespace localRAG
 {
@@ -25,7 +27,7 @@ namespace localRAG
     {
         private static string IMPORT_PATH = "";
         private const string SYSTEM_PROMPT = """
-                           You are a helpful assistant replying to user questions using information from your memory. You use the concept of RAG, to work with local documents.
+                           You are a helpful assistant replying to user questions using information from your memory. You use the concept of RAG (Retreival augmented generation), to work with local documents.
                            Reply very briefly and concisely, get to the point immediately. Don't provide long explanations unless necessary.
                            Sometimes you don't have relevant memories so you reply saying you don't know, don't have the information.
                            For retrieving information to answer complex questions, you have to first plan your search strategy by deciding which steps to take.
@@ -105,15 +107,18 @@ namespace localRAG
             // create sk prompt for checking an AI chatresult for hallucinations
 
             var path = Path.Combine(Directory.GetCurrentDirectory(), "Plugins/Prompts");
-            var intentPrompts = kernel35.ImportPluginFromPromptDirectory(path, "IntentsPlugin");
-            var rewriteUserAsk = kernel35.ImportPluginFromPromptDirectory(path, "RewriteUserAskPlugin");
+            var promptPlugins = kernel35.ImportPluginFromPromptDirectory(path);
+            var intentPrompt = promptPlugins["IntentsPlugin"];
+            var haluCheckPrompt = promptPlugins["HalucinationCheckPlugin"];
+            var ragOrNotRagPrompt = promptPlugins["RagOrNotRag"];
+            var rewriteUserAskPrompt = promptPlugins["RewriteUserAskPlugin"];
 
             // ==================================
             // === LOAD DOCUMENTS INTO MEMORY ===
             // ==================================
 
 
-            await ImportDocuments(kernel35, memoryConnector, intentPrompts);
+            await ImportDocuments(kernel35, memoryConnector, promptPlugins);
 
 
             // ==============================================
@@ -122,39 +127,48 @@ namespace localRAG
 
 
             // add a user input loop for interactive testing
-            chatHistory.AddAssistantMessage("Hello, I'm your assistant. Ask me anything about documents stored in kernel memories.");
+            //chatHistory.AddAssistantMessage("Hello, I'm your assistant. Ask me anything about your own documents.");
             var reply = new StringBuilder();
             var chathistoryservice = kernel.GetRequiredService<IChatCompletionService>();
 
             var longtermDone = false;
+            var messageCount = 0;
             while (true)
             {
                 Console.WriteLine("---------");
                 Console.WriteLine("Enter a question or type 'exit' to quit:");
-                var userMessage = Console.ReadLine()?.Trim();
+                var userInput = Console.ReadLine()?.Trim();
 
-                if (string.IsNullOrWhiteSpace(userMessage))
+                var clearMessages = () =>
+                {
+                    chatHistory.Clear();
+                    chatHistory.AddSystemMessage(systemPrompt);
+                    messageCount = 0;
+                };
+
+                if (string.IsNullOrWhiteSpace(userInput))
                 { continue; }
                 else
                 {
-                    if (userMessage.StartsWith("/"))
+                    if (userInput.StartsWith("/"))
                     {
-                        switch (userMessage.ToLower())
+                        switch (userInput.ToLower())
                         {
                             case "/q":
                             case "/exit":
                                 return;
                             case "/clear":
-                                chatHistory.Clear();
-                                chatHistory.AddSystemMessage(systemPrompt);
+                                clearMessages();
                                 continue;
                             case "/ri":
                             case "/removeindex":
                                 await Helpers.RemoveAllIndexs(memoryConnector);
+                                clearMessages();
                                 continue;
                             case "/reimport":
                             case "/im":
-                                await ImportDocuments(kernel35, memoryConnector, intentPrompts);
+                                await ImportDocuments(kernel35, memoryConnector, promptPlugins);
+                                clearMessages();
                                 continue;
                             case "/gi":
                             case "/GenerateIntents":
@@ -175,70 +189,64 @@ namespace localRAG
                                 continue;
                         }
                     }
-
+                    messageCount++;
                 }
 
-                //var intent = Helpers.AskForIntent(userMessage, memoryConnector);
-                if (true)
+                // in case of long history, reduce the input to the last 5 messages
+                // compose the working batch as a single string
+                // SystemPrompt + 5 last messages + userMessage
+                if (false)
                 {
-                    var orig_usermessage = userMessage;
-                    if (chatHistory.Count() > 4)
+                    var orig_userInput = userInput;
+                    if (messageCount > 4)
                     {
                         var lastDialogItems = chatHistory.TakeLast(5).Aggregate("", (acc, item) => acc + "\n" + item.Content);
-                        userMessage = lastDialogItems.Split("\n").Aggregate("", (acc, item) => acc + '\n' + item);
-                        userMessage += "\n" + orig_usermessage;
-                    }else{
-                        userMessage = chatHistory.TakeLast(chatHistory.Count()-1).Aggregate("", (acc, item) => acc + "\n" + item.Content);
-                        userMessage += "\n" + orig_usermessage;
+                        lastDialogItems = chatHistory[0].Content + lastDialogItems;
+                        userInput = lastDialogItems.Split("\n").Aggregate("", (acc, item) => acc + '\n' + item);
+                        userInput += "\n" + orig_userInput;
                     }
-
-                    var rag_search = false;
-                    try
+                    else
                     {
-                        var userask = await kernel35.InvokeAsync<string>(rewriteUserAsk["RagOrNotRag"], new() { ["chat"] = userMessage });
-                        rag_search = bool.Parse(userask.Replace("```json\n", "").Replace("```", "").Trim());
-                        logger.LogInformation("Rag search: " + (rag_search?"yes":"no"));
-
-                        userask = await kernel35.InvokeAsync<string>(rewriteUserAsk["RewriteUserAskPlugin"], new() { ["question"] = userMessage });
-                        userask = userask.Replace("```json\n", "").Replace("```", "").Trim();
-                        logger.LogInformation("Rewritten user ask: " + userask);
-
-                        var user_messages = JsonSerializer.Deserialize<List<UserAsk>>(userask);
-                        userMessage = user_messages.Last().StandaloneQuestion;
-                    }
-                    catch (System.Exception e)
-                    {
-                        logger.LogError("Error in rewriting user ask: " +e.Message);
-                        userMessage = orig_usermessage;
-                    }
-
-                    if (rag_search)
-                    {
-
-                        var intents = await Helpers.AskForIntent(userMessage, memoryConnector);
-                        logger.LogInformation("Intents: " + intents);
-
-                        // === ASK MEMORY ===================
-                        // Recall relevant information from memory
-                        // ==================================
-                        var longTermMemory = await Helpers.GetLongTermMemory(memoryConnector, userMessage, intents: intents);
-                        logger.LogInformation("Long term memory: " + longTermMemory);
-
-                        // Inject the memory recall in the initial system message
-                        //chatHistory[0].Content = $"{systemPrompt}\n\nLong term memory:\n{longTermMemory}";
-                        chatHistory.AddUserMessage($"\n{longTermMemory}\n{userMessage}");
-                        longtermDone = true;
-                    }else
-                    {
-                        chatHistory.AddUserMessage(userMessage);
+                        userInput = chatHistory.Aggregate("", (acc, item) => acc + "\n" + item.Content);
+                        userInput += "\n" + orig_userInput;
                     }
                 }
+
+                // ----------- REWRITE LAST USER ASK ----------------
+                var userInputs = await RewriteUserAsk(logger, kernel35, rewriteUserAskPrompt, messageCount, chatHistory, userInput);
+
+                // ----------- ROUTING TO RAG OR NOT RAG ----------------
+                var rag_search = await Router(logger, kernel, ragOrNotRagPrompt, messageCount, chatHistory, userInputs.Last());
+
+                if (!rag_search) // just using data from chat history
+                {
+                    chatHistory.AddUserMessage(userInput);
+                }
+                else
+                {
+                    // --- GET INTENTS ---
+                    var intents = new List<string>();
+                    foreach (var input in userInputs)
+                    {
+                        intents.AddRange(await Helpers.AskForIntent(input, memoryConnector));
+                    }
+                    logger.LogInformation("Intents: " + string.Join("\n#", intents));
+
+                    // --- GET LONG TERM MEMORY ---
+                    var longTermMemory = await Helpers.GetLongTermMemory(memoryConnector, userInput, intents: intents);
+                    logger.LogInformation($"Long term memory:\n\t{longTermMemory}");
+
+                    chatHistory.AddUserMessage($"\n{longTermMemory}\n{userInput}");
+                    longtermDone = true;
+                }
+
+
 
                 // Generate the next chat message, stream the response
                 Console.Write("\nCopilot> ");
                 reply.Clear();
-                ChatHistory last5 = new ChatHistory(chatHistory.TakeLast(5));
-                await foreach (StreamingChatMessageContent stream in chathistoryservice.GetStreamingChatMessageContentsAsync(last5, promptOptions, kernel))
+
+                await foreach (StreamingChatMessageContent stream in chathistoryservice.GetStreamingChatMessageContentsAsync(chatHistory, promptOptions, kernel))
                 {
                     Console.Write(stream.Content);
                     reply.Append(stream.Content);
@@ -255,6 +263,68 @@ namespace localRAG
 
             }
 
+        }
+
+        private static async Task<List<string?>> RewriteUserAsk(ILogger logger, Kernel kernel, KernelFunction rewriteUserAskPrompt, int messageCount, ChatHistory chatHist, string? userInput)
+        {
+            List<UserAsk> rewrittenQuestions = new();
+            var messages = ChatHistoryToString(messageCount, chatHist, userInput);
+            try
+            {
+                var userask = await kernel.InvokeAsync<string>(rewriteUserAskPrompt, new() { ["question"] = messages });
+                userask = userask.Replace("```json\n", "").Replace("```", "").Trim();
+                logger.LogInformation("Rewritten user ask: " + userask);
+
+                rewrittenQuestions = JsonSerializer.Deserialize<List<UserAsk>>(userask);
+            }
+            catch (System.Exception e)
+            {
+                logger.LogError("Error in rewriting user ask: " + e.Message);
+                logger.LogError($"\tUser ask: \n\t{rewrittenQuestions.Aggregate("", (acc, item) => acc + "\n" + item.StandaloneQuestion)}");
+            }
+            return rewrittenQuestions.Select(x => x.StandaloneQuestion).ToList();
+        }
+
+        private static async Task<bool> Router(ILogger logger, Kernel kernel, KernelFunction ragOrNotRagPrompt, int messageCount, ChatHistory chatHist, string? userInput)
+        {
+            bool rag_search;
+            if (messageCount == 1) // the first user message always goes to RAG
+            {
+                rag_search = true;
+            }
+            else
+            {
+                var message = ChatHistoryToString(messageCount, chatHist, userInput);
+
+                // invoke plugin to decide if the message should go to RAG or not
+                var ragAsk = await kernel.InvokeAsync<string>(ragOrNotRagPrompt, new() { ["chat"] = message });
+
+                rag_search = bool.Parse(ragAsk.Replace("```json\n", "").Replace("```", "").Trim());
+                logger.LogInformation("Rag search: " + (rag_search ? "yes" : "no"));
+            }
+
+            return rag_search;
+        }
+
+        private static string ChatHistoryToString(int messageCount, ChatHistory chatHist, string? userInput)
+        {
+            StringBuilder userMessageBuilder = new();
+            if (messageCount > 9)
+            {
+                userMessageBuilder.Append(chatHist[0].Content);
+                userMessageBuilder.Append("\n");
+                userMessageBuilder.Append(chatHist.TakeLast(5).Aggregate("", (acc, item) => acc + "\n" + item.Content));
+                userMessageBuilder.Append("\n");
+                userMessageBuilder.Append(userInput);
+            }
+            else
+            {
+                userMessageBuilder.Append(chatHist.Aggregate("", (acc, item) => acc + "\n" + item.Content));
+                userMessageBuilder.Append("\n");
+                userMessageBuilder.Append(userInput);
+            }
+            userInput = userMessageBuilder.ToString();
+            return userInput;
         }
 
         private static async Task ImportDocuments(Kernel kernel, MemoryServerless memoryConnector, KernelPlugin prompts)

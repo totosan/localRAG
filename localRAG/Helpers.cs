@@ -110,15 +110,13 @@ namespace localRAG
         }
         public static async Task<List<string>> AskForIntent(string request, IKernelMemory s_memory)
         {
-            Console.WriteLine($"Question: {request}");
-
-            // we ask for one chank of data with a minimum relevance of 0.75
-            SearchResult answer = await s_memory.SearchAsync(request, index: "intent", minRelevance: 0.60, limit: 3);
+            SearchResult answer = await s_memory.SearchAsync(request, index: "intent", minRelevance: 0.50, limit: 3);
             List<string> intents = new List<string>();
             foreach (Citation result in answer.Results)
             {
                 var retrievedIntents = GetTagValue(result, "intent", "none");
-                if(retrievedIntents!= null &&
+                var retrievedMainIntents = GetTagValue(result, "mainintent", "none");
+                if (retrievedIntents != null &&
                      intents.Find(i => i == retrievedIntents) == null)
                 {
                     intents.Add(retrievedIntents);
@@ -321,31 +319,39 @@ namespace localRAG
         {
             return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(url))).ToUpperInvariant();
         }
-        public static Kernel GetSemanticKernel(bool low = false)
+        public static Kernel GetSemanticKernel(bool low = false, bool debug = false)
         {
             Kernel kernel;
+            IKernelBuilder builder;
             if (!low)
             {
                 Console.WriteLine(Environment.GetEnvironmentVariable("AZURE_OPENAI_MODEL"));
-                kernel = Kernel.CreateBuilder()
+                builder = Kernel.CreateBuilder()
                 .AddAzureOpenAIChatCompletion(
                     Environment.GetEnvironmentVariable("AZURE_OPENAI_MODEL")!,  // The name of your deployment (e.g., "text-davinci-003")
                     Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT")!,    // The endpoint of your Azure OpenAI service
                     Environment.GetEnvironmentVariable("AZURE_OPENAI_API_KEY")!      // The API key of your Azure OpenAI service
                 )
-                .Build();
+                ;
             }
             else
             {
                 Console.WriteLine(Environment.GetEnvironmentVariable("AZURE_OPENAI_MODEL_LOW"));
-                kernel = Kernel.CreateBuilder()
+                builder = Kernel.CreateBuilder()
                 .AddAzureOpenAIChatCompletion(
                     Environment.GetEnvironmentVariable("AZURE_OPENAI_MODEL_LOW")!,  // The name of your deployment (e.g., "text-davinci-003")
                     Environment.GetEnvironmentVariable("AZURE_OPENAI_ENDPOINT")!,    // The endpoint of your Azure OpenAI service
                     Environment.GetEnvironmentVariable("AZURE_OPENAI_API_KEY")!      // The API key of your Azure OpenAI service
                 )
-                .Build();
+                ;
             }
+            if (debug)
+                builder.Services.AddLogging(loggingBuilder =>
+                           {
+                               loggingBuilder.AddConsole();
+                               loggingBuilder.SetMinimumLevel(LogLevel.Debug);
+                           });
+            kernel = builder.Build();
             return kernel;
         }
 
