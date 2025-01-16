@@ -155,8 +155,8 @@ namespace localRAG
                 .OnEvent(CommonEvents.ExitSend)
                 .StopProcess();
             chatUserInputStep
-                .OnEvent(CommonEvents.UsersChatInputReceived)
-                .SendEventTo(searchRAGStep_sub.WhereInputEventIs(CommonEvents.RewriteUsersAskSend));
+                .OnEvent(ChatUserInputStep.OutputEvents.UsersChatInputReceived)
+                .SendEventTo(searchRAGStep_sub.WhereInputEventIs(RewriteAskStep.OutputEvents.RewriteUsersAskSend));
             searchRAGStep_sub
                 .OnEvent(CommonEvents.ResponseToUserSend)
                 .SendEventTo(new ProcessFunctionTargetBuilder(chatUserInputStep, ChatUserInputStep.Functions.GetUserInput));

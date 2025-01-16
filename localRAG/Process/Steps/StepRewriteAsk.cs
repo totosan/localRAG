@@ -15,6 +15,12 @@ namespace localRAG.Process.Steps
             public const string RewriteAsk = nameof(RewriteAsk);
         }
 
+        public class OutputEvents
+        {
+            public static string RewriteUsersAskSend { get; internal set; } = nameof(RewriteUsersAskSend);
+            public static string RewriteUsersAskReceived { get; internal set; } = nameof(RewriteUsersAskReceived);
+        }
+
         [KernelFunction(Functions.RewriteAsk)]
         public async Task RewriteAskAsync(KernelProcessStepContext context, string userInput, Kernel _kernel)
         {
@@ -60,7 +66,7 @@ namespace localRAG.Process.Steps
             await context.EmitEventAsync(
                 new KernelProcessEvent
                 {
-                    Id = StepEvents.CommonEvents.RewriteUsersAskReceived,
+                    Id = OutputEvents.RewriteUsersAskReceived,
                     Data = searchData
                 });
         }

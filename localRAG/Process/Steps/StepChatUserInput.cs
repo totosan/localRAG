@@ -13,6 +13,7 @@ public class ChatUserInputStep : KernelProcessStep<UserInputState>
 
     public class OutputEvents
     {
+        public static string UsersChatInputReceived { get; internal set; } = nameof(UsersChatInputReceived);
         public static string ClearChatHistorySend { get; internal set; } = nameof(ClearChatHistorySend);
         public static string RemoveIndexSend { get; internal set; } = nameof(RemoveIndexSend);
         public static string ReimportDocumentsSend { get; internal set; } = nameof(ReimportDocumentsSend);
@@ -103,7 +104,7 @@ public class ChatUserInputStep : KernelProcessStep<UserInputState>
         _state.CurrentInputIndex++;
 
         // emitting userInputReceived event
-        await context.EmitEventAsync(new() { Id = StepEvents.CommonEvents.UsersChatInputReceived, Data = userInput });
+        await context.EmitEventAsync(new() { Id = OutputEvents.UsersChatInputReceived, Data = userInput });
     }
 }
 #pragma warning restore SKEXP0080 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.

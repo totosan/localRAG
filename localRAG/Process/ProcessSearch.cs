@@ -33,11 +33,11 @@ namespace localRAG.Process
             var renderStep = processBuilder.AddStepFromType<Steps.RenderResponsesStep>();
 
             processBuilder
-                .OnInputEvent(StepEvents.CommonEvents.RewriteUsersAskSend)
+                .OnInputEvent(RewriteAskStep.OutputEvents.RewriteUsersAskSend)
                 .SendEventTo(new ProcessFunctionTargetBuilder(rewriteStep, parameterName: "userInput"));
 
             rewriteStep
-                .OnEvent(CommonEvents.RewriteUsersAskReceived)
+                .OnEvent(RewriteAskStep.OutputEvents.RewriteUsersAskReceived)
                 .SendEventTo(new ProcessFunctionTargetBuilder(routingStep, RoutingStep.Functions.RoutingStep, parameterName: "searchData"));
             routingStep
                 .OnEvent(Steps.RoutingStep.OutputEvents.RagSearchRequested)
