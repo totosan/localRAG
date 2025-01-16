@@ -11,6 +11,9 @@ using localRAG.Models;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using DocumentFormat.OpenXml.Math;
+using Microsoft.SemanticKernel.ChatCompletion;
+using localRAG.Utilities;
+using System.Diagnostics;
 
 namespace localRAG
 {
@@ -110,17 +113,22 @@ namespace localRAG
         }
         public static async Task<List<string>> AskForIntent(string request, IKernelMemory s_memory)
         {
-            SearchResult answer = await s_memory.SearchAsync(request, index: "intent", minRelevance: 0.50, limit: 3);
+            SearchResult answer = await s_memory.SearchAsync(request, index: "intent", minRelevance: 0.70, limit: 3);
             List<string> intents = new List<string>();
             foreach (Citation result in answer.Results)
             {
                 var retrievedIntents = GetTagValue(result, "intent", "none");
                 var retrievedMainIntents = GetTagValue(result, "mainintent", "none");
-                if (retrievedIntents != null &&
+                if (false && retrievedIntents != null &&
                      intents.Find(i => i == retrievedIntents) == null)
                 {
                     intents.Add(retrievedIntents);
                 }
+                if(retrievedMainIntents != null &&
+                     intents.Find(i => i == retrievedMainIntents) == null)
+                {
+                    intents.Add(retrievedMainIntents);
+                }   
             }
 
             return intents;
@@ -167,7 +175,7 @@ namespace localRAG
             return documentCategories;
         }
 
-        public static async Task RemoveAllIndexs(IKernelMemory memoryConnector)
+        public static async Task RemoveAllIndexsAsync(IKernelMemory memoryConnector)
         {
             var indexes = await memoryConnector.ListIndexesAsync();
             Console.WriteLine($"Found {indexes.Count()} indexes");
@@ -319,11 +327,11 @@ namespace localRAG
         {
             return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(url))).ToUpperInvariant();
         }
-        public static Kernel GetSemanticKernel(bool low = false, bool debug = false)
+        public static Kernel GetSemanticKernel(bool weakGpt = false, bool debug = false, ChatHistory history = null)
         {
             Kernel kernel;
             IKernelBuilder builder;
-            if (!low)
+            if (!weakGpt)
             {
                 Console.WriteLine(Environment.GetEnvironmentVariable("AZURE_OPENAI_MODEL"));
                 builder = Kernel.CreateBuilder()
@@ -345,18 +353,19 @@ namespace localRAG
                 )
                 ;
             }
-            if (debug)
-                builder.Services.AddLogging(loggingBuilder =>
-                           {
-                               loggingBuilder.AddConsole();
-                               loggingBuilder.SetMinimumLevel(LogLevel.Debug);
-                           });
+            var loggingLevel = debug ? LogLevel.Debug : LogLevel.Warning;
+            builder.Services.AddLogging(loggingBuilder =>
+                       {
+                           loggingBuilder.AddConsole();
+                           loggingBuilder.SetMinimumLevel(loggingLevel);
+                       });
+            builder.Services.AddSingleton<IChatHistoryProvider>(new ChatHistoryProvider(history));
             kernel = builder.Build();
             return kernel;
         }
 
 
-        public static T GetMemoryConnector<T>(bool serverless = false, bool useAzure = false) where T : IKernelMemory
+        public static T GetMemoryConnector<T>(bool serverless = false, bool useAzure = false, bool debug = false) where T : IKernelMemory
         {
             if (!serverless)
             {
@@ -395,10 +404,16 @@ namespace localRAG
                     //.With(new MsExcelDecoderConfig { DateFormat = "yyyy-MM-ddTHH:mm:ss.fffZ", DateFormatProvider = CultureInfo.InvariantCulture })
                     .WithCustomImageOcr(new TesseractOCR())
                     .WithContentDecoder<CustomPdfDecoder>();
+                
+                // ##### setup logging #####
+                var loggingLevel = debug ? LogLevel.Debug : LogLevel.Warning;
                 kernel.Services.AddLogging(loggingBuilder =>
-                {
-                    loggingBuilder.AddConsole();
-                });
+                           {
+                               loggingBuilder.AddConsole();
+                               loggingBuilder.SetMinimumLevel(loggingLevel);
+                           });
+
+
                 return (T)(IKernelMemory)kernel.Build<MemoryServerless>();
             }
             else
@@ -425,6 +440,30 @@ namespace localRAG
         {
             return Environment.GetEnvironmentVariable(name)
                    ?? throw new ArgumentException($"Env var {name} not set");
+        }
+
+        public static string ChatHistoryToString(ChatHistory chatHist, string? userInput)
+        {
+            StringBuilder userMessageBuilder = new();
+#pragma warning disable SKEXP0001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+            var messageCount = chatHist.Where(c => c.Role == AuthorRole.User).Count();
+#pragma warning restore SKEXP0001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+            if (messageCount > 9)
+            {
+                userMessageBuilder.Append(chatHist[0].Content);
+                userMessageBuilder.Append("\n");
+                userMessageBuilder.Append(chatHist.TakeLast(5).Aggregate("", (acc, item) => acc + "\n" + item.Content));
+                userMessageBuilder.Append("\n");
+                userMessageBuilder.Append(userInput);
+            }
+            else
+            {
+                userMessageBuilder.Append(chatHist.Aggregate("", (acc, item) => acc + "\n" + item.Content));
+                userMessageBuilder.Append("\n");
+                userMessageBuilder.Append(userInput);
+            }
+            userInput = userMessageBuilder.ToString();
+            return userInput;
         }
     }
 

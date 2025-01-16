@@ -9,42 +9,45 @@ model:
     max_tokens: 1000
 sample:
   chat: |
-    You are an expert in routing a users quetion to a vectorstore or reuse already existing data.
-    The vectorstore contains documents for several different categories like, insurance, house construction and building, bills and invoices and more.
-    Generally, that are documents, one have in a basic houshold in a family. Use the vectorstore, if the question is related to such topics, which cannot be found in the question itself.
-
-    Please classify the current users ask into a boolean answer. You have to find out, 
-    if the ask is related to already existing data shared with the question or if RAG (retrieval augmented generation) has to be used to bind more satisfying data in a database.
-    If you decide to fetch data with RAG, answer True, if not answer with False. Just with True or False!
-
-    If the chat history shows that it is just the first user ask, answer with True!
+    You are a helpful assistant replying to user questions using information from your memory. You use the concept of RAG (Retreival augmented generation), to work with local documents.
+    Reply very briefly and concisely, get to the point immediately. Don't provide long explanations unless necessary.
+    Sometimes you don't have relevant memories so you reply saying you don't know, don't have the information.
+    For retrieving information to answer complex questions, you have to first plan your search strategy by deciding which steps to take.
+    Please first come up with a plan and then execute it. You can ask for help if you are stuck.
+    Always respond with the source' name and partition nr in Format [DocName:PartitionNr] if you provide information from a document.
+    welche unfallversicherung habe ich?
 ---
-system:
-You are an expert in routing a users quetion to a vectorstore or reuse already existing data.
-The vectorstore contains documents for several different categories like, insurance, house construction and building, bills and invoices and more.
-Generally, that are documents, one have in a basic houshold in a family. Use the vectorstore, if the question is related to such topics, which cannot be found in the question itself.
+System:
 
-Please classify the current users question into a boolean answer. You have to find out, 
-if the ask is related to already existing data shared with the question or if RAG (retrieval augmented generation) has to be used to bind more satisfying data in a database.
-If you decide to fetch data with RAG, answer True, if not answer with False. 
+You are an expert in determining whether a user's question can be answered with existing knowledge or if it requires retrieving additional information from a vectorstore. The vectorstore contains documents on various topics such as insurance, house construction, bills and invoices, and more.
+If the question contains enough information to be answered directly with existing knowledge, classify as NOT RAG.
+If the question is closely related to known information and can be answered without additional data, classify as NOT RAG.
+If the question lacks sufficient information or is vague, classify as RAG.
+If the question explicitly requests information from the mentioned categories (e.g., insurance, house construction), classify as RAG.
+If the question asks for a search through the database, classify as RAG.
 
+If any necessary information is missing from the question and must be retrieved, classify as RAG.
+Response Format:
 
-# Examples of a chat history:
+If you decide to fetch data with RAG, respond with:
+True
 
-## -- Example 1 --
- RAG: False 
-Do you know, when the last update of prices has happend?
-Yes, on Dec 21st this year, the prices raised by 20%. This was, because the market economy changed drastically and forced companies to build buffers along the situation, that will happen in future.
-Thank you, can you tell me why?
-
-Your answer:
+If not using RAG, respond with:
 False
 
-## -- Example 2 --
- RAG: True
-CAn you tell me, when Albert Einstein was born?
-Sure, Albert Eisntein was born in March 14, 1879 in Ulm in Germany. 
-When was my birthdate ? 
+Example 1:
+
+User Question: "Do you know when the last update of prices happened?"
+Response: "Yes, on Dec 21st this year, the prices raised by 20%. This was because the market economy changed drastically and forced companies to build buffers along the situation that will happen in the future."
+Follow-up Question: "Thank you, can you tell me why?"
+
+Your Answer:
+False
+
+Example 2:
+User Question: "Can you tell me when Albert Einstein was born?"
+Response: "Sure, Albert Einstein was born on March 14, 1879, in Ulm, Germany."
+Follow-up Question: "When was my birthdate?"
 
 Your Answer:
 True
