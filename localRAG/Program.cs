@@ -145,9 +145,6 @@ namespace localRAG
             var searchRAGStep_sub = mainProcess.AddStepFromProcess(SearchProcess.CreateProcess());
             var DatasourceMaintenanceStep = mainProcess.AddStepFromType<DatasourceMaintenanceStep>();
 
-            // todo: move events to the according steps
-
-
             mainProcess
                 .OnInputEvent(CommonEvents.StartProcessSend)
                 .SendEventTo(new ProcessFunctionTargetBuilder(chatUserInputStep, ChatUserInputStep.Functions.GetUserInput));
