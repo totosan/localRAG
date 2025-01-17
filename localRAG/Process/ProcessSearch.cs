@@ -35,6 +35,10 @@ namespace localRAG.Process
             processBuilder
                 .OnInputEvent(RewriteAskStep.OutputEvents.RewriteUsersAskSend)
                 .SendEventTo(new ProcessFunctionTargetBuilder(rewriteStep, parameterName: "userInput"));
+            
+            processBuilder
+                .OnInputEvent(ChatUserInputStep.OutputEvents.ReimportDocumentsSend)
+                .SendEventTo(new ProcessFunctionTargetBuilder(ragSearchStep, LookupKernelmemoriesStep.Functions.RemoveIndex));
 
             rewriteStep
                 .OnEvent(RewriteAskStep.OutputEvents.RewriteUsersAskReceived)
@@ -51,6 +55,7 @@ namespace localRAG.Process
             ragSearchStep
                 .OnEvent(Steps.LookupKernelmemoriesStep.OutputEvents.MemoryDataReceived)
                 .SendEventTo(new ProcessFunctionTargetBuilder(responseStep, ResponseStep.Functions.GetChatResponse, parameterName: "searchData"));
+
             responseStep
                 .OnEvent(CommonEvents.ResponseToUserSend)
                 .SendEventTo(new ProcessFunctionTargetBuilder(renderStep, RenderResponsesStep.Functions.RenderResponses, parameterName: "responseToRender"));

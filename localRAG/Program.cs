@@ -50,6 +50,10 @@ namespace localRAG
                    If the answer is empty say "I don't know", otherwise reply with a preview of the answer, truncated to 15 words.
                    """;
 
+        static bool DEBUG_KERNEL35 = false;
+        static bool DEBUG_KERNEL = false;
+        static bool DEBUG_MEMORY = false;
+
         public static async Task Main(string[] args)
         {
             IEnumerable<KeyValuePair<string, string>> ENV = DotNetEnv.Env.Load(".env");
@@ -74,8 +78,8 @@ namespace localRAG
             var chatHistory = new ChatHistory();
             chatHistory.AddSystemMessage(SYSTEM_PROMPT);
 
-            Kernel kernel = Helpers.GetSemanticKernel(debug: false, history: chatHistory);
-            Kernel kernel35 = Helpers.GetSemanticKernel(debug: false, history: chatHistory);
+            Kernel kernel = Helpers.GetSemanticKernel(debug: DEBUG_KERNEL, history: chatHistory);
+            Kernel kernel35 = Helpers.GetSemanticKernel(debug: DEBUG_KERNEL35, history: chatHistory);
 
             var promptOptions = new AzureOpenAIPromptExecutionSettings
             {
@@ -85,18 +89,15 @@ namespace localRAG
                 TopP = 0,
                 FunctionChoiceBehavior = FunctionChoiceBehavior.Auto()
             };
-            //var memoryIndexAsk = kernel.CreateFunctionFromPrompt(SK_PROMPT_ASK, promptOptions);
-            //var memoryIndexSearch = kernel.CreateFunctionFromPrompt(SK_PROMPT_SEARCH, promptOptions);
 
             // ==================================
             // === PREPARE MEMORY CONNECTOR =====
             // ==================================
 
             // Load the Kernel Memory plugin into Semantic Kernel.
-            var memoryConnector = Helpers.GetMemoryConnector<MemoryServerless>(serverless: true, useAzure: true);
+            var memoryConnector = Helpers.GetMemoryConnector<MemoryServerless>(serverless: true, useAzure: true, debug:DEBUG_MEMORY);
             memoryConnector.Orchestrator.AddHandler<GenerateTagsHandler>("generate_tags"); // this adds tags according to its content
             //memoryConnector.Orchestrator.AddHandler<ManageTagHandler>("manage_tags"); 
-
 
             // =======================
             // === PREPARE PLUGINS ===
@@ -111,10 +112,7 @@ namespace localRAG
             var path = Path.Combine(Directory.GetCurrentDirectory(), "Plugins/Prompts");
             var promptPlugins_35 = kernel35.ImportPluginFromPromptDirectory(path);
             var promptPlugins = kernel.ImportPluginFromPromptDirectory(path);
-            var intentPrompt = promptPlugins["IntentsPlugin"];
-            var haluCheckPrompt = promptPlugins["HalucinationCheckPlugin"];
-            var ragOrNotRagPrompt = promptPlugins["RagOrNotRag"];
-            var rewriteUserAskPrompt = promptPlugins["RewriteUserAskPlugin"];
+
 
             // ==================================
             // === LOAD DOCUMENTS INTO MEMORY ===
@@ -154,21 +152,33 @@ namespace localRAG
             chatUserInputStep
                 .OnEvent(ChatUserInputStep.OutputEvents.UsersChatInputReceived)
                 .SendEventTo(searchRAGStep_sub.WhereInputEventIs(RewriteAskStep.OutputEvents.RewriteUsersAskSend));
+            chatUserInputStep
+                .OnEvent(ChatUserInputStep.OutputEvents.ChatLoopSend)
+                .SendEventTo(new ProcessFunctionTargetBuilder(chatUserInputStep, ChatUserInputStep.Functions.GetUserInput));
+            chatUserInputStep
+                .OnEvent(ChatUserInputStep.OutputEvents.RemoveIndexSend)
+                .SendEventTo(searchRAGStep_sub.WhereInputEventIs(ChatUserInputStep.OutputEvents.ReimportDocumentsSend));
             searchRAGStep_sub
                 .OnEvent(CommonEvents.ResponseToUserSend)
                 .SendEventTo(new ProcessFunctionTargetBuilder(chatUserInputStep, ChatUserInputStep.Functions.GetUserInput));
-
+            searchRAGStep_sub
+                .OnEvent(LookupKernelmemoriesStep.OutputEvents.IndexesRemoved)
+                .SendEventTo(new ProcessFunctionTargetBuilder(chatUserInputStep));
+            
             var process = mainProcess.Build();
 
-            // Generate a Mermaid diagram for the process and print it to the console
-            string mermaidGraph = process.ToMermaid();
-            Console.WriteLine($"=== Start - Mermaid Diagram for '{mainProcess.Name}' ===");
-            Console.WriteLine(mermaidGraph);
-            Console.WriteLine($"=== End - Mermaid Diagram for '{mainProcess.Name}' ===");
+            if (false)
+            {
+                // Generate a Mermaid diagram for the process and print it to the console
+                string mermaidGraph = process.ToMermaid();
+                Console.WriteLine($"=== Start - Mermaid Diagram for '{mainProcess.Name}' ===");
+                Console.WriteLine(mermaidGraph);
+                Console.WriteLine($"=== End - Mermaid Diagram for '{mainProcess.Name}' ===");
 
-            // Generate an image from the Mermaid diagram
-            //string generatedImagePath = await MermaidRenderer.GenerateMermaidImageAsync(mermaidGraph,"ChatBotProcess.png");
-            //Console.WriteLine($"Diagram generated at: {generatedImagePath}");
+                // Generate an image from the Mermaid diagram
+                //string generatedImagePath = await MermaidRenderer.GenerateMermaidImageAsync(mermaidGraph,"ChatBotProcess.png");
+                //Console.WriteLine($"Diagram generated at: {generatedImagePath}");
+            }
 
             using var runningProcess = await process.StartAsync(kernel, new KernelProcessEvent { Id = CommonEvents.StartProcessSend });
 
@@ -179,7 +189,7 @@ namespace localRAG
 
         private static async Task ImportDocuments(Kernel kernel, MemoryServerless memoryConnector, KernelPlugin prompts)
         {
-            var tags = await Helpers.LoadAndStorePdfFromPath(memoryConnector, IMPORT_PATH);
+            var tags = await LongtermMemoryHelper.LoadAndStorePdfFromPathAsync(memoryConnector, IMPORT_PATH);
             if (false)
             {            // I want to have each distinct tag as a list of tags / the key itself is also a tag
                 var listOfTags = new Dictionary<string, List<string>>();

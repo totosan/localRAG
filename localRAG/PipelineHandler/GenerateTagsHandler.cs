@@ -9,6 +9,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using localRAG;
+using localRAG.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.KernelMemory.AI;
 using Microsoft.KernelMemory.Context;
@@ -106,12 +107,17 @@ public sealed class GenerateTagsHandler : IPipelineStepHandler
         DataPipeline pipeline, CancellationToken cancellationToken = default)
     {
         this._log.LogDebug("Generating ToC, pipeline '{0}/{1}'", pipeline.Index, pipeline.DocumentId);
-
+        List<ImportedFile> importedFiles = new List<ImportedFile>();
+        var numberImportedFiles = 0;
         foreach (DataPipeline.FileDetails uploadedFile in pipeline.Files)
         {
             // Track new files being generated (cannot edit originalFile.GeneratedFiles while looping it)
             Dictionary<string, DataPipeline.GeneratedFileDetails> tocFiles = [];
-
+            importedFiles.Add(new ImportedFile { 
+                    Filename = uploadedFile.Name,
+                    DocId = pipeline.DocumentId,
+                    Tags = new TagCollection() 
+                });
             foreach (KeyValuePair<string, DataPipeline.GeneratedFileDetails> generatedFile in uploadedFile.GeneratedFiles)
             {
                 var file = generatedFile.Value;
@@ -144,18 +150,22 @@ public sealed class GenerateTagsHandler : IPipelineStepHandler
                                 summary = summary.Replace("```json", "").Replace("```", "").Trim();
                                 // read the summary, which is a string containing json and convert it to a dictionary
                                 var tags = JsonSerializer.Deserialize<IDictionary<string, List<string?>>>(summary);
+                                // join key and values of tags to one list and add it to the tags of the file
+                                // finacial
+                                //  - taxes
+                                //  - income
+                                // insurance
+                                //  - health
+                                //  - car
+                                //  --> intent: finacial, taxes, income, insurance, health, car
+                                var tagsList = new List<string>();
                                 foreach (var tag in tags)
                                 {
-                                    if (tag.Key == "suggestion")
-                                    {
-                                        Console.WriteLine("Suggestion: ");
-                                        foreach (var suggestion in tag.Value)
-                                        {
-                                            Console.WriteLine(suggestion);
-                                        }
-                                    }
-                                    pipeline.Tags.Add(tag.Key, tag.Value);
+                                    tagsList.Add(tag.Key);
+                                    tagsList.AddRange(tag.Value);
+                                    PrintSuggestion(tag);
                                 }
+                                pipeline.Tags["intent"] =  tagsList;
                             }
                             catch (System.Text.Json.JsonException e)
                             {
@@ -169,9 +179,10 @@ public sealed class GenerateTagsHandler : IPipelineStepHandler
                         this._log.LogWarning("File {0} cannot be summarized, type not supported", file.Name);
                         continue;
                 }
-
+                
                 file.MarkProcessedBy(this);
-            }
+                importedFiles[numberImportedFiles].Tags = pipeline.Tags;
+            }// per partition
 
             // Add new files to pipeline status
             foreach (var file in tocFiles)
@@ -179,10 +190,25 @@ public sealed class GenerateTagsHandler : IPipelineStepHandler
                 file.Value.MarkProcessedBy(this);
                 uploadedFile.GeneratedFiles.Add(file.Key, file.Value);
             }
-        }
-
+        }// per file
+        var jsonserialized = JsonSerializer.Serialize(importedFiles);
+        // write to file "importedFiles.json" 
+        await File.WriteAllTextAsync("importedFiles.json", jsonserialized);
         return (ReturnType.Success, pipeline);
     }
+
+    private static void PrintSuggestion(KeyValuePair<string, List<string?>> tag)
+    {
+        if (tag.Key == "suggestion")
+        {
+            Console.WriteLine("Suggestion: ");
+            foreach (var suggestion in tag.Value)
+            {
+                Console.WriteLine(suggestion);
+            }
+        }
+    }
+
     public static string CalculateSHA256(BinaryData binaryData)
     {
         byte[] byteArray = SHA256.HashData(binaryData.ToMemory().Span);

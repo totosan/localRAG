@@ -43,15 +43,15 @@ namespace localRAG.Process.Steps
         [KernelFunction(Functions.RemoveIndex)]
         public async Task RemoveIndexAsync(KernelProcessStepContext context)
         {
-            await Helpers.RemoveAllIndexsAsync(_state!.MemoryConnector);
-            await context.EmitEventAsync(new KernelProcessEvent { Id = OutputEvents.IndexesRemoved });
+            await LongtermMemoryHelper.RemoveAllIndexsAsync(_state!.MemoryConnector);
+            await context.EmitEventAsync(new KernelProcessEvent { Id = OutputEvents.IndexesRemoved , Visibility = KernelProcessEventVisibility.Public });
         }
 
         [KernelFunction(Functions.GetIntentOfAsk)]
         public async Task AskForIntentAsync(KernelProcessStepContext context, SearchData searchData)
         {
             var intents = new List<string>();
-            intents.AddRange(await Helpers.AskForIntent(searchData.StandaloneQuestions.First().StandaloneQuestion, _state!.MemoryConnector));
+            intents.AddRange(await LongtermMemoryHelper.AskForIntentAsync(searchData.StandaloneQuestions.First().StandaloneQuestion, _state!.MemoryConnector));
             searchData.Intents = intents;
             _logger.LogInformation("Intents: " + string.Join("\n#", intents));
             await context.EmitEventAsync(new KernelProcessEvent { Id = OutputEvents.IntentsReceived, Data = searchData });
@@ -64,8 +64,8 @@ namespace localRAG.Process.Steps
             var userInput = searchData.UserMessage;
             var intents = searchData.Intents;
 
-            var longTermMemory = await Helpers.GetLongTermMemory(_state!.MemoryConnector, searchData.StandaloneQuestions.First().StandaloneQuestion);
-            //var longTermMemory = await Helpers.GetLongTermMemory(_state!.MemoryConnector, searchData.StandaloneQuestions.First().StandaloneQuestion, intents: intents);
+            //var longTermMemory = await LongtermMemoryHelper.GetLongTermMemory(_state!.MemoryConnector, searchData.StandaloneQuestions.First().StandaloneQuestion);
+            var longTermMemory = await LongtermMemoryHelper.GetLongTermMemory(_state!.MemoryConnector, searchData.StandaloneQuestions.First().StandaloneQuestion, intents: intents);
             _logger.LogInformation($"Long term memory:\n\t{longTermMemory}");
 
             chatHistory.AddUserMessage($"\n{longTermMemory}");

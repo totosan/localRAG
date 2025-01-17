@@ -14,6 +14,7 @@ public class ChatUserInputStep : KernelProcessStep<UserInputState>
     public class OutputEvents
     {
         public static string UsersChatInputReceived { get; internal set; } = nameof(UsersChatInputReceived);
+        public static string ChatLoopSend { get; internal set; } = nameof(ChatLoopSend);
         public static string ClearChatHistorySend { get; internal set; } = nameof(ClearChatHistorySend);
         public static string RemoveIndexSend { get; internal set; } = nameof(RemoveIndexSend);
         public static string ReimportDocumentsSend { get; internal set; } = nameof(ReimportDocumentsSend);
@@ -92,9 +93,11 @@ public class ChatUserInputStep : KernelProcessStep<UserInputState>
                         Console.WriteLine("\t/clear - Clear the chat history");
                         Console.WriteLine("\t/removeIndex - Delete all indexes");
                         Console.WriteLine("\t/reimport - Reimport all documents");
+                        await context.EmitEventAsync(new() { Id = OutputEvents.ChatLoopSend });
                         return;
                     default:
                         Console.WriteLine("Unknown command. Type /help for a list of commands.");
+                        await context.EmitEventAsync(new() { Id = OutputEvents.ChatLoopSend });
                         return;
                 }
             }

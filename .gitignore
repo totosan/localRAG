@@ -30,3 +30,4 @@ packages/
 
 .env
 appsettings.Development.json
+imported*.json
