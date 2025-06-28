@@ -57,13 +57,14 @@ namespace localRAG
 
         public static async Task Main(string[] args)
         {
+            PrintFancyTitle();
             IEnumerable<KeyValuePair<string, string>> ENV = DotNetEnv.Env.Load(".env");
             IMPORT_PATH = Helpers.EnvVar("IMPORT_PATH") ?? throw new Exception("IMPORT_PATH not found in .env file");
 
             // Check if there are documents to process
             if (!Directory.Exists(IMPORT_PATH) || Directory.GetFiles(IMPORT_PATH).Length == 0)
             {
-                Console.WriteLine($"No documents found in {IMPORT_PATH}. Please upload documents before starting the application.");
+                AssistantAnswer($"No documents found in [yellow]{IMPORT_PATH}[/]. Please upload documents before starting the application.");
                 return;
             }
 
@@ -71,9 +72,9 @@ namespace localRAG
             string tagsPath = Path.Combine(Directory.GetCurrentDirectory(), "tags.json");
             if (!File.Exists(tagsPath))
             {
-                Console.WriteLine("tags.json not found. Generating tags.json...");
+                AssistantAnswer("tags.json not found. Generating tags.json...");
                 await GenerateTagsJsonAsync(tagsPath);
-                Console.WriteLine("tags.json created.");
+                AssistantAnswer("tags.json created.");
             }
 
             // ==================================
@@ -432,6 +433,20 @@ namespace localRAG
         public static void DebugStep(string stepName, string message)
         {
             AnsiConsole.MarkupLine($"[bold blue][[DEBUG]][/] [bold yellow]Step:[/] [green]{stepName}[/] - {message}");
+        }
+
+        public static void PrintFancyTitle()
+        {
+            AnsiConsole.Write(
+                new FigletText("localRAG Assistant")
+                    .Centered()
+                    .Color(Color.Cyan1));
+            AnsiConsole.MarkupLine("[bold blue]Your modern, local Retrieval-Augmented Generation assistant[/]\n");
+        }
+
+        public static void AssistantAnswer(string message)
+        {
+            AnsiConsole.MarkupLine($"[bold][[ASSISTANT]][/] [springgreen3_1]{message}[/]");
         }
     }
 }
