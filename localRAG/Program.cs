@@ -25,6 +25,7 @@ using localRAG.Process.StepEvents;
 using Microsoft.SemanticKernel.Process.Tools;
 using localRAG.Utilities;
 using localRAG.Process;
+using Spectre.Console;
 
 namespace localRAG
 {
@@ -339,9 +340,9 @@ namespace localRAG
             var prompts = kernel.ImportPluginFromPromptDirectory(Path.Combine(Directory.GetCurrentDirectory(), "Plugins/Prompts"));
 
             // Now that the handler is registered, load and process the documents
-            Console.WriteLine("Loading and processing documents from: " + IMPORT_PATH);
+            AnsiConsole.MarkupLine($"[bold blue]Loading and processing documents from:[/] [underline yellow]{IMPORT_PATH}[/]");
             var documentTags = await LongtermMemoryHelper.LoadAndStorePdfFromPathAsync(memoryConnector, IMPORT_PATH);
-            Console.WriteLine($"Successfully processed documents. Found {documentTags.Count} document tags.");
+            AnsiConsole.MarkupLine($"[green]✔ Successfully processed documents. Found [bold]{documentTags.Count}[/] document tags.[/]");
 
             // Prepare tag collection, combining existing and new tags
             var combinedTags = new Dictionary<string, HashSet<string>>(existingTags);
@@ -374,55 +375,63 @@ namespace localRAG
                     kv => kv.Value.ToList()
                 );
 
-            Console.WriteLine("Generating questions for tags using IntentsPlugin...");
-            var result = await kernel.InvokeAsync<string>(
-                prompts["IntentsPlugin"],
-                new() { ["input"] = JsonSerializer.Serialize(tagSerializationInput) }
-            );
-
-            // Clean and parse generated tag questions, with null checks
-            var intentListWithQuestions = result?
-                .Replace("```json\n", "")
-                .Replace("```", "")
-                .Trim() ?? string.Empty;
-
-            var generatedTagCollection = JsonSerializer.Deserialize<Dictionary<string, List<string>>>(intentListWithQuestions)
-                ?? new Dictionary<string, List<string>>();
-
-            // Merge and deduplicate tags
-            var mergedTags = new Dictionary<string, HashSet<string>>(existingTags);
-            foreach (var kvp in generatedTagCollection.Where(k => !string.IsNullOrWhiteSpace(k.Key)))
-            {
-                if (!mergedTags.ContainsKey(kvp.Key!))
+            await AnsiConsole.Status()
+                .StartAsync("[bold yellow]Generating questions for tags using IntentsPlugin...[/]", async ctx =>
                 {
-                    mergedTags[kvp.Key!] = new HashSet<string>();
-                }
-
-                // Add new unique questions to existing tag questions
-                if (kvp.Value != null)
-                {
-                    mergedTags[kvp.Key!].UnionWith(
-                        kvp.Value
-                            .Where(q => !string.IsNullOrWhiteSpace(q))
+                    var result = await kernel.InvokeAsync<string>(
+                        prompts["IntentsPlugin"],
+                        new() { ["input"] = JsonSerializer.Serialize(tagSerializationInput) }
                     );
-                }
-            }
 
-            // Prepare tags for serialization (convert HashSet back to List)
-            var tagsForSerialization = mergedTags
-                .Where(kv => !string.IsNullOrWhiteSpace(kv.Key))
-                .ToDictionary(
-                    kvp => kvp.Key!,
-                    kvp => kvp.Value.ToList()
-                );
+                    // Clean and parse generated tag questions, with null checks
+                    var intentListWithQuestions = result?
+                        .Replace("```json\n", "")
+                        .Replace("```", "")
+                        .Trim() ?? string.Empty;
 
-            // Write updated tags to file
-            await File.WriteAllTextAsync(
-                tagsPath,
-                JsonSerializer.Serialize(tagsForSerialization, new JsonSerializerOptions { WriteIndented = true })
-            );
+                    var generatedTagCollection = JsonSerializer.Deserialize<Dictionary<string, List<string>>>(intentListWithQuestions)
+                        ?? new Dictionary<string, List<string>>();
 
-            Console.WriteLine($"Tags generated and saved to {tagsPath}. Total unique tags: {tagsForSerialization.Count}");
+                    // Merge and deduplicate tags
+                    var mergedTags = new Dictionary<string, HashSet<string>>(existingTags);
+                    foreach (var kvp in generatedTagCollection.Where(k => !string.IsNullOrWhiteSpace(k.Key)))
+                    {
+                        if (!mergedTags.ContainsKey(kvp.Key!))
+                        {
+                            mergedTags[kvp.Key!] = new HashSet<string>();
+                        }
+
+                        // Add new unique questions to existing tag questions
+                        if (kvp.Value != null)
+                        {
+                            mergedTags[kvp.Key!].UnionWith(
+                                kvp.Value
+                                    .Where(q => !string.IsNullOrWhiteSpace(q))
+                            );
+                        }
+                    }
+
+                    // Prepare tags for serialization (convert HashSet back to List)
+                    var tagsForSerialization = mergedTags
+                        .Where(kv => !string.IsNullOrWhiteSpace(kv.Key))
+                        .ToDictionary(
+                            kvp => kvp.Key!,
+                            kvp => kvp.Value.ToList()
+                        );
+
+                    // Write updated tags to file
+                    await File.WriteAllTextAsync(
+                        tagsPath,
+                        JsonSerializer.Serialize(tagsForSerialization, new JsonSerializerOptions { WriteIndented = true })
+                    );
+
+                    AnsiConsole.MarkupLine($"[bold green]Tags generated and saved to[/] [underline yellow]{tagsPath}[/]. [bold]Total unique tags:[/] {tagsForSerialization.Count}");
+                });
+        }
+
+        public static void DebugStep(string stepName, string message)
+        {
+            AnsiConsole.MarkupLine($"[bold blue][[DEBUG]][/] [bold yellow]Step:[/] [green]{stepName}[/] - {message}");
         }
     }
 }
