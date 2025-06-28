@@ -31,3 +31,6 @@ packages/
 .env
 appsettings.Development.json
 imported*.json
+
+**/MongoDB/data/
+**/MongoDB/log/

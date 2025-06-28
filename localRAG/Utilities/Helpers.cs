@@ -25,14 +25,32 @@ namespace localRAG
 
 
 
-
+/// <summary>
+/// Get a Semantic Kernel instance with Azure OpenAI configuration.
+/// If `weakGpt` is true, it uses a lower-tier model.
+/// If `debug` is true, it sets the logging level to Debug.
+/// If `history` is provided, it uses it as the chat history provider.
+/// 
+/// This method is used to create a Semantic Kernel instance that can be used for various AI tasks.
+/// It configures the kernel with Azure OpenAI settings and sets up logging based on the debug flag.
+/// The chat history provider is also set if a history object is provided.
+/// 
+/// Note: Ensure that the environment variables for Azure OpenAI are set correctly before calling this method.
+/// 
+/// Example usage:
+/// var kernel = Helpers.GetSemanticKernel(weakGpt: false, debug: true, history: myChatHistory);
+/// </summary>
+/// <param name="weakGpt">Whether to use a weaker GPT model.</param>
+/// <param name="debug">Whether to enable debug logging.</param>
+/// <param name="history">The chat history provider.</param>
+/// <returns></returns>
         public static Kernel GetSemanticKernel(bool weakGpt = false, bool debug = false, ChatHistory history = null)
         {
             Kernel kernel;
             IKernelBuilder builder;
             if (!weakGpt)
             {
-                Console.WriteLine(Environment.GetEnvironmentVariable("AZURE_OPENAI_MODEL"));
+                Console.WriteLine($"used model for intelligent tasks: {Environment.GetEnvironmentVariable("AZURE_OPENAI_MODEL")}");
                 builder = Kernel.CreateBuilder()
                 .AddAzureOpenAIChatCompletion(
                     Environment.GetEnvironmentVariable("AZURE_OPENAI_MODEL")!,  // The name of your deployment (e.g., "text-davinci-003")
@@ -43,7 +61,7 @@ namespace localRAG
             }
             else
             {
-                Console.WriteLine(Environment.GetEnvironmentVariable("AZURE_OPENAI_MODEL_LOW"));
+                Console.WriteLine($"used model for simple tasks: {Environment.GetEnvironmentVariable("AZURE_OPENAI_MODEL_LOW")}");
                 builder = Kernel.CreateBuilder()
                 .AddAzureOpenAIChatCompletion(
                     Environment.GetEnvironmentVariable("AZURE_OPENAI_MODEL_LOW")!,  // The name of your deployment (e.g., "text-davinci-003")

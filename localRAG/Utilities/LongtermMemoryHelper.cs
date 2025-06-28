@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -13,6 +14,12 @@ namespace localRAG.Utilities
 {
     public class LongtermMemoryHelper
     {
+        /// <summary>
+        /// Loads and stores PDF, DOCX, PPTX, and image files from the specified directory into memory, extracting tags for each document.
+        /// </summary>
+        /// <param name="memoryConnector">The kernel memory connector instance.</param>
+        /// <param name="path">The directory path to search for files.</param>
+        /// <returns>A TagCollection containing tags from the last processed file.</returns>
         public static async Task<TagCollection> LoadAndStorePdfFromPathAsync(IKernelMemory memoryConnector, string path)
         {
             // read all pdf, docx, images and pptx n a directory
@@ -57,6 +64,13 @@ namespace localRAG.Utilities
         }
 
 
+        /// <summary>
+        /// Retrieves tags from a document by its ID and prints them to the console.
+        /// </summary>
+        /// <param name="memoryConnector">The kernel memory connector instance.</param>
+        /// <param name="file">The file name (optional, for logging).</param>
+        /// <param name="fileId">The document ID.</param>
+        /// <returns>A TagCollection containing the tags for the document.</returns>
         private static async Task<TagCollection> GetTagsFromDocumentById(IKernelMemory memoryConnector, string? file, string fileId)
         {
             TagCollection tags = new TagCollection();
@@ -87,9 +101,9 @@ namespace localRAG.Utilities
         /// <summary>
         /// Retrieves the intents from the long-term memory based on the provided request.
         /// </summary>
-        /// <param name="request"></param>
-        /// <param name="s_memory"></param>
-        /// <returns></returns>
+        /// <param name="request">The user request string.</param>
+        /// <param name="s_memory">The kernel memory connector instance.</param>
+        /// <returns>A list of intent strings found in memory.</returns>
         public static async Task<List<string>> AskForIntentAsync(string request, IKernelMemory s_memory)
         {
             SearchResult answer = await s_memory.SearchAsync(request, index: "intent", minRelevance: 0.70, limit: 3);
@@ -114,12 +128,13 @@ namespace localRAG.Utilities
         }
 
         /// <summary>
-        /// Retrieves long-term memory based on the provided query.
+        /// Retrieves long-term memory based on the provided query, optionally using intent filters and chunking.
         /// </summary>
         /// <param name="memory">The kernel memory interface to interact with.</param>
         /// <param name="query">The query string to search for in the memory.</param>
-        /// <param name="asChunks">A boolean indicating whether to fetch the memory as chunks or not. Default is true.</param>
-        /// <returns>A task that represents the asynchronous operation. The task result contains the retrieved memory as a string.</returns>
+        /// <param name="asChunks">Whether to fetch the memory as chunks. Default is true.</param>
+        /// <param name="intents">Optional list of intent filters.</param>
+        /// <returns>A JSON string containing the retrieved memory as a list of DocumentsSimple objects.</returns>
         public static async Task<string> GetLongTermMemory(IKernelMemory memory, string query, bool asChunks = true, List<string> intents = null)
         {
 
@@ -152,6 +167,7 @@ namespace localRAG.Utilities
                     {
                         filters.Add(MemoryFilters.ByTag("intent", intent));
                     }
+                    //filters.Add(MemoryFilters.ByDocument("EDDECB333E4D891C10661DA505D327560B40BEFC0C9254D5B3B580BF379A0008"));
                     memories = await memory.SearchAsync(query, minRelevance: 0.4, limit: 3, filters: filters, context: context);
                 }
                 else
@@ -159,6 +175,7 @@ namespace localRAG.Utilities
                     memories = await memory.SearchAsync(query, minRelevance: 0.4, limit: 3, context: context);
                 }
                 //List<SortedDictionary<int, Citation.Partition>> partCollection = await GetAdjacentChunks(memory, memories);
+                var adjacent = await GetAdjacentChunksInMemoriesAsync(memory, memories);
                 if (memories.Results.Count > 0)
                 {
                     Console.WriteLine("Did a SEARCH");
@@ -206,7 +223,57 @@ namespace localRAG.Utilities
             return JsonSerializer.Serialize(documents);
         }
 
+        /// <summary>
+        /// Retrieves adjacent memory chunks for each partition in the search results.
+        /// </summary>
+        /// <param name="memory">The kernel memory interface.</param>
+        /// <param name="memories">The search results to find adjacent chunks for.</param>
+        /// <returns>A list of SearchResult objects containing adjacent partitions.</returns>
+        private static async Task<List<SearchResult>> GetAdjacentChunksInMemoriesAsync(IKernelMemory memory, SearchResult memories)
+        {
+            var partCollection = new List<SearchResult>();
+            // create a copy of memories to change its partitions independently (different object not reference)
+            var copy = new SearchResult
+            {
+                Results = new List<Citation>(memories.Results)
+            };
 
+            foreach (var mem in memories.Results)
+            {
+                foreach (var part in mem.Partitions)
+                {
+                    var partitions = new SortedDictionary<int, Citation.Partition> { [part.PartitionNumber] = part };
+                    // Filters to fetch adjacent partitions
+                    var filters = new List<MemoryFilter>
+                        {
+                            MemoryFilters.ByDocument(mem.DocumentId).ByTag(Constants.ReservedFilePartitionNumberTag, $"{part.PartitionNumber - 1}"),
+                            MemoryFilters.ByDocument(mem.DocumentId).ByTag(Constants.ReservedFilePartitionNumberTag, $"{part.PartitionNumber + 1}")
+                        };
+
+                    // Fetch adjacent partitions and add them to the sorted collection
+                    partCollection.Add(await memory.SearchAsync("", filters: filters, limit: 2));
+                }
+            }
+
+            // find related partitions in the copy and add the adjacent partitions according to the documentid and partition number
+            for (int i = 0; i < partCollection.Count; i++)
+            {
+                foreach (var part in partCollection[i].Results)
+                {
+                    foreach (var partition in part.Partitions)
+                    {
+                        copy.Results[i].Partitions.Add(partition);
+                    }
+                }
+            }
+            return partCollection;
+        }
+        /// <summary>
+        /// Retrieves adjacent memory chunks for each partition in the search results (alternative method).
+        /// </summary>
+        /// <param name="memory">The kernel memory interface.</param>
+        /// <param name="memories">The search results to find adjacent chunks for.</param>
+        /// <returns>A list of sorted dictionaries mapping partition numbers to partitions.</returns>
         private static async Task<List<SortedDictionary<int, Citation.Partition>>> GetAdjacentChunks(IKernelMemory memory, SearchResult memories)
         {
             var partCollection = new List<SortedDictionary<int, Citation.Partition>>();
@@ -236,6 +303,11 @@ namespace localRAG.Utilities
             return partCollection;
         }
 
+        /// <summary>
+        /// Imports a list of web pages into memory, avoiding duplicates.
+        /// </summary>
+        /// <param name="memory">The kernel memory connector instance.</param>
+        /// <param name="pages">A list of web page URLs to import.</param>
         public static async Task MemorizeWebPages(IKernelMemory memory, List<string> pages)
         {
             await memory.ImportTextAsync("We can talk about Semantic Kernel and Kernel Memory, you can ask any questions, I will try to reply using information from public documentation in Github", documentId: "help");
@@ -249,12 +321,21 @@ namespace localRAG.Utilities
                 }
             }
         }
+        /// <summary>
+        /// Generates a unique document ID for a given URL using hashing.
+        /// </summary>
+        /// <param name="url">The URL to hash.</param>
+        /// <returns>The hashed document ID.</returns>
         public static string GetUrlId(string url)
         {
             return Helpers.HashThis(url);
         }
 
 
+        /// <summary>
+        /// Removes all indexes from the memory connector.
+        /// </summary>
+        /// <param name="memoryConnector">The kernel memory connector instance.</param>
         public static async Task RemoveAllIndexsAsync(IKernelMemory memoryConnector)
         {
             var indexes = await memoryConnector.ListIndexesAsync();
@@ -267,6 +348,11 @@ namespace localRAG.Utilities
         }
 
 
+        /// <summary>
+        /// Creates intent documents in memory from provided intent samples, uploading each question as a document with tags.
+        /// </summary>
+        /// <param name="memoryConnector">The kernel memory connector instance.</param>
+        /// <param name="intentSamples">The intent samples containing categories and questions.</param>
         public static async Task CreateIntents(IKernelMemory memoryConnector, DocumentCategories intentSamples)
         {
             foreach (var category in intentSamples.Categories)
@@ -290,6 +376,13 @@ namespace localRAG.Utilities
         }
 
 
+        /// <summary>
+        /// Retrieves the value of a specific tag from a citation answer, or returns a default value if not found.
+        /// </summary>
+        /// <param name="answer">The citation answer object.</param>
+        /// <param name="tagName">The tag name to look for.</param>
+        /// <param name="defaultValue">The default value to return if the tag is not found.</param>
+        /// <returns>The tag value if found, otherwise the default value.</returns>
         public static string? GetTagValue(Citation answer, string tagName, string? defaultValue = null)
         {
             if (answer == null)

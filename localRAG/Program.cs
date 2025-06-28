@@ -59,6 +59,22 @@ namespace localRAG
             IEnumerable<KeyValuePair<string, string>> ENV = DotNetEnv.Env.Load(".env");
             IMPORT_PATH = Helpers.EnvVar("IMPORT_PATH") ?? throw new Exception("IMPORT_PATH not found in .env file");
 
+            // Check if there are documents to process
+            if (!Directory.Exists(IMPORT_PATH) || Directory.GetFiles(IMPORT_PATH).Length == 0)
+            {
+                Console.WriteLine($"No documents found in {IMPORT_PATH}. Please upload documents before starting the application.");
+                return;
+            }
+
+            // Check if tags.json exists, if not, generate it
+            string tagsPath = Path.Combine(Directory.GetCurrentDirectory(), "tags.json");
+            if (!File.Exists(tagsPath))
+            {
+                Console.WriteLine("tags.json not found. Generating tags.json...");
+                await GenerateTagsJson(tagsPath);
+                Console.WriteLine("tags.json created.");
+            }
+
             // ==================================
             // ===          SETUP LOGGING     ===
             // ==================================
@@ -78,8 +94,8 @@ namespace localRAG
             var chatHistory = new ChatHistory();
             chatHistory.AddSystemMessage(SYSTEM_PROMPT);
 
-            Kernel kernel = Helpers.GetSemanticKernel(debug: DEBUG_KERNEL, history: chatHistory);
-            Kernel kernel35 = Helpers.GetSemanticKernel(debug: DEBUG_KERNEL35, history: chatHistory);
+            Kernel kernel = Helpers.GetSemanticKernel(debug: DEBUG_KERNEL, history: chatHistory); // Create a Semantic Kernel instance with the chat history. 
+            Kernel kernel35 = Helpers.GetSemanticKernel(weakGpt: true, debug: DEBUG_KERNEL35, history: chatHistory);
 
             var promptOptions = new AzureOpenAIPromptExecutionSettings
             {
@@ -118,8 +134,8 @@ namespace localRAG
             // === LOAD DOCUMENTS INTO MEMORY ===
             // ==================================
 
-
             await ImportDocuments(kernel35, memoryConnector, promptPlugins);
+            //await CreateIntentionsAsync(memoryConnector);
 
             // ==================================
             // === Create Process WF for RAG ===
@@ -190,7 +206,7 @@ namespace localRAG
         private static async Task ImportDocuments(Kernel kernel, MemoryServerless memoryConnector, KernelPlugin prompts)
         {
             var tags = await LongtermMemoryHelper.LoadAndStorePdfFromPathAsync(memoryConnector, IMPORT_PATH);
-            if (false)
+            if (true)
             {            // I want to have each distinct tag as a list of tags / the key itself is also a tag
                 var listOfTags = new Dictionary<string, List<string>>();
                 foreach (var tag in tags)
@@ -211,6 +227,53 @@ namespace localRAG
                 var intentListWithQuestions = result.Replace("```json\n", "").Replace("```", "").Trim();
                 var tagCollection = JsonSerializer.Deserialize<Dictionary<string, List<string?>>>(intentListWithQuestions);
             }
+
+    
+        }
+    
+        private static async Task CreateIntentionsAsync(IKernelMemory kernelMemory)
+        {
+           var tags = await Helpers.ReadTagsFromFile();
+           await LongtermMemoryHelper.CreateIntents(kernelMemory , tags);
+        }
+
+        /// <summary>
+        /// Generates the tags.json file by extracting tags and related questions from imported documents.
+        /// Avoids duplicate questions within each tag.
+        /// </summary>
+        /// <param name="tagsPath">The path where tags.json will be created.</param>
+        private static async Task GenerateTagsJson(string tagsPath)
+        {
+            var memoryConnector = Helpers.GetMemoryConnector<MemoryServerless>(serverless: true, useAzure: true, debug: DEBUG_MEMORY);
+            var kernel = Helpers.GetSemanticKernel(debug: DEBUG_KERNEL);
+            var prompts = kernel.ImportPluginFromPromptDirectory(Path.Combine(Directory.GetCurrentDirectory(), "Plugins/Prompts"));
+            var tags = await LongtermMemoryHelper.LoadAndStorePdfFromPathAsync(memoryConnector, IMPORT_PATH);
+            var listOfTags = new Dictionary<string, HashSet<string>>();
+            foreach (var tag in tags)
+            {
+                if (!listOfTags.ContainsKey(tag.Key))
+                {
+                    listOfTags[tag.Key] = new HashSet<string>();
+                }
+                foreach (var value in tag.Value)
+                {
+                    if (!listOfTags.ContainsKey(value))
+                    {
+                        listOfTags[value] = new HashSet<string>();
+                    }
+                }
+            }
+            // Generate questions/intents for tags
+            var result = await kernel.InvokeAsync<string>(prompts["IntentsPlugin"], new() { ["input"] = JsonSerializer.Serialize(listOfTags.ToDictionary(kv => kv.Key, kv => kv.Value.ToList())) });
+            var intentListWithQuestions = result.Replace("```json\n", "").Replace("```", "").Trim();
+            // Parse and deduplicate questions within each tag
+            var tagCollection = JsonSerializer.Deserialize<Dictionary<string, List<string>>>(intentListWithQuestions);
+            var deduped = new Dictionary<string, List<string>>();
+            foreach (var kv in tagCollection)
+            {
+                deduped[kv.Key] = new List<string>(new HashSet<string>(kv.Value));
+            }
+            await File.WriteAllTextAsync(tagsPath, JsonSerializer.Serialize(deduped, new JsonSerializerOptions { WriteIndented = true }));
         }
     }
 }
