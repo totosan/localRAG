@@ -2,6 +2,15 @@
 
 localRAG is a modular, extensible Retrieval-Augmented Generation (RAG) system designed for local and hybrid document processing, semantic search, and AI-powered Q&A. It integrates Azure OpenAI, Ollama, MongoDB, Tesseract OCR, and PDF processing to enable advanced document understanding and conversational AI workflows.
 
+---
+
+**See also:**
+- [Solution Overview](solution.md)
+- [Solution Flowcharts](solution_flowchart.md)
+- [Main Process Flow](Process_main.md)
+- [Datasource Maintenance Process](process_datasource_maintenance.md)
+- [Tag Generation & Usage](CREATE_TAG.md)
+
 ## Project Overview
 
 localRAG ingests documents, extracts and indexes their content, and enables users to query and interact with the knowledge base using state-of-the-art LLMs. The system supports tagging, categorization, and long-term memory, making it suitable for personal, research, or enterprise use.
@@ -110,6 +119,29 @@ flowchart LR
 ---
 
 ## Getting Started
+
+### Requirements
+- [.NET 8 or 9 SDK](https://dotnet.microsoft.com/en-us/download)
+- [Docker & Docker Compose](https://docs.docker.com/get-docker/)
+- (Optional) Azure account for Azure OpenAI and Cognitive Search
+- (Optional) Ollama for local LLMs
+
+### Start MongoDB with Docker Compose
+
+MongoDB is required for persistent storage. You can start it using the provided `docker-compose.yml`:
+
+```sh
+# From the project root
+# This will start MongoDB in the background
+docker compose -f localRAG/docker-compose.yml up -d
+```
+
+You can check the status with:
+```sh
+docker compose -f localRAG/docker-compose.yml ps
+```
+
+### Application Setup
 
 1. **Clone the repository**
 2. **Configure environment variables** in `.env` (see sample in repo)

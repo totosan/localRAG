@@ -1,5 +1,12 @@
 # tags.json Creation and Purpose
 
+**Related documentation:**
+- [README](README.md)
+- [Solution Overview](solution.md)
+- [Solution Flowcharts](solution_flowchart.md)
+- [Main Process Flow](Process_main.md)
+- [Datasource Maintenance Process](process_datasource_maintenance.md)
+
 ## Purpose
 
 `tags.json` is a key component for enhancing Retrieval-Augmented Generation (RAG) search with intent recognition. It maps user questions and intents to tags, which are then used to efficiently find relevant documents or content chunks in the database. When a user asks a question, the system can look up the corresponding tag(s) in `tags.json` and use them to retrieve related information.

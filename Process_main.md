@@ -1,5 +1,12 @@
 # Main Process Flow: User Input as a Process Step
 
+**Related documentation:**
+- [README](README.md)
+- [Solution Overview](solution.md)
+- [Solution Flowcharts](solution_flowchart.md)
+- [Datasource Maintenance Process](process_datasource_maintenance.md)
+- [Tag Generation & Usage](CREATE_TAG.md)
+
 This document describes the main workflow of the localRAG application, focusing on how user input is handled as a process step. The flow is orchestrated using a process builder pattern, with each step representing a distinct part of the Retrieval Augmented Generation (RAG) pipeline.
 
 ## Overview
