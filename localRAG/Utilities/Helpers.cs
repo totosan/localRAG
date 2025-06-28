@@ -95,6 +95,7 @@ namespace localRAG
                 mongoConfig.DatabaseName = EnvVar("MONGODB_DATABASE_NAME");
                 mongoConfig.WithSingleCollectionForVectorSearch(true);
 
+
                 var kernel = new KernelMemoryBuilder()
                     .WithAzureOpenAITextEmbeddingGeneration(new AzureOpenAIConfig
                     {

@@ -132,6 +132,18 @@ flowchart LR
 
 ---
 
+## Tagging & Intent Mapping
+
+- If `tags.json` is missing, the system will generate it automatically at startup by processing all uploaded documents.
+- Tags are extracted from document content, and for each tag, a set of related user questions/intents is generated.
+- Duplicate questions within each tag are removed automatically.
+- Tags are used as key-value pairs for document categorization and intent-driven retrieval in the RAG workflow.
+- If no documents are present, the system will prompt for uploads before proceeding with tag generation.
+
+See `CREATE_TAG.md` for more details on the tag generation process and the structure of `tags.json`.
+
+---
+
 ## Extending localRAG
 
 - Add new document types by extending the extraction pipeline.

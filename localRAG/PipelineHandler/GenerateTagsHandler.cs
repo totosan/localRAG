@@ -40,16 +40,19 @@ public sealed class GenerateTagsHandler : IPipelineStepHandler
     /// </summary>
     /// <param name="stepName">Pipeline step for which the handler will be invoked</param>
     /// <param name="orchestrator">Current orchestrator used by the pipeline, giving access to content and other helps.</param>
-    /// <param name="promptProvider">Class responsible for providing a given prompt</param>
-    /// <param name="loggerFactory">Application logger factory</param>
+    /// <param name="mainTags">The dictionary containing the main tags and their associated questions.</param>
+    /// <param name="promptProvider">Class responsible for providing a given prompt</n>
+    /// <param name="loggerFactory">Application logger factory</n>
     public GenerateTagsHandler(
         string stepName,
         IPipelineOrchestrator orchestrator,
+        Dictionary<string, Dictionary<string, List<string>>> mainTags, // Added parameter
         IPromptProvider? promptProvider = null,
         ILoggerFactory? loggerFactory = null)
     {
         this.StepName = stepName;
         this._orchestrator = orchestrator;
+        this._mainTags = mainTags; // Assign the passed data
 
 #pragma warning disable KMEXP00 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         promptProvider ??= new EmbeddedPromptProvider();
@@ -95,10 +98,11 @@ public sealed class GenerateTagsHandler : IPipelineStepHandler
 
         this._log.LogInformation("Handler '{0}' ready", stepName);
 
-        IEnumerable<KeyValuePair<string, string>> ENV = DotNetEnv.Env.Load(".env");
-        var tagsFile = Helpers.EnvVar("TAGS_COLLECTION_FILE") ?? throw new Exception("TAGS not found in .env file");
-        var tagsFileText = File.ReadAllTextAsync(tagsFile).GetAwaiter().GetResult();
-        this._mainTags = JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, List<string>>>>(tagsFileText);
+        // Removed file reading from constructor
+        // IEnumerable<KeyValuePair<string, string>> ENV = DotNetEnv.Env.Load(".env");
+        // var tagsFile = Helpers.EnvVar("TAGS_COLLECTION_FILE") ?? throw new Exception("TAGS not found in .env file");
+        // var tagsFileText = File.ReadAllTextAsync(tagsFile).GetAwaiter().GetResult();
+        // this._mainTags = JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, List<string>>>>(tagsFileText);
 
     }
 
@@ -113,11 +117,12 @@ public sealed class GenerateTagsHandler : IPipelineStepHandler
         {
             // Track new files being generated (cannot edit originalFile.GeneratedFiles while looping it)
             Dictionary<string, DataPipeline.GeneratedFileDetails> tocFiles = [];
-            importedFiles.Add(new ImportedFile { 
-                    Filename = uploadedFile.Name,
-                    DocId = pipeline.DocumentId,
-                    Tags = new TagCollection() 
-                });
+            importedFiles.Add(new ImportedFile
+            {
+                Filename = uploadedFile.Name,
+                DocId = pipeline.DocumentId,
+                Tags = new TagCollection()
+            });
             foreach (KeyValuePair<string, DataPipeline.GeneratedFileDetails> generatedFile in uploadedFile.GeneratedFiles)
             {
                 var file = generatedFile.Value;
@@ -150,22 +155,30 @@ public sealed class GenerateTagsHandler : IPipelineStepHandler
                                 summary = summary.Replace("```json", "").Replace("```", "").Trim();
                                 // read the summary, which is a string containing json and convert it to a dictionary
                                 var tags = JsonSerializer.Deserialize<IDictionary<string, List<string?>>>(summary);
-                                // join key and values of tags to one list and add it to the tags of the file
-                                // finacial
-                                //  - taxes
-                                //  - income
-                                // insurance
-                                //  - health
-                                //  - car
-                                //  --> intent: finacial, taxes, income, insurance, health, car
-                                var tagsList = new List<string>();
-                                foreach (var tag in tags)
+
+                                if (tags != null)
                                 {
-                                    tagsList.Add(tag.Key);
-                                    tagsList.AddRange(tag.Value);
-                                    PrintSuggestion(tag);
+                                    // join key and values of tags to one list and add it to the tags of the file
+                                    // finacial
+                                    //  - taxes
+                                    //  - income
+                                    // insurance
+                                    //  - health
+                                    //  - car
+                                    //  --> intent: finacial, taxes, income, insurance, health, car
+                                    var tagsList = new List<string?>();
+                                    foreach (var tag in tags)
+                                    {
+                                        tagsList.Add(tag.Key);
+                                        if (tag.Value != null)
+                                        {
+                                            tagsList.AddRange(tag.Value);
+                                        }
+                                        // Assuming PrintSuggestion is a helper method that can handle nullable strings
+                                        // PrintSuggestion(tag);
+                                    }
+                                    pipeline.Tags["intent"] = tagsList;
                                 }
-                                pipeline.Tags["intent"] =  tagsList;
                             }
                             catch (System.Text.Json.JsonException e)
                             {
@@ -179,7 +192,7 @@ public sealed class GenerateTagsHandler : IPipelineStepHandler
                         this._log.LogWarning("File {0} cannot be summarized, type not supported", file.Name);
                         continue;
                 }
-                
+
                 file.MarkProcessedBy(this);
                 importedFiles[numberImportedFiles].Tags = pipeline.Tags;
             }// per partition

@@ -1,9 +1,11 @@
 # tags.json Creation and Purpose
 
 ## Purpose
+
 `tags.json` is a key component for enhancing Retrieval-Augmented Generation (RAG) search with intent recognition. It maps user questions and intents to tags, which are then used to efficiently find relevant documents or content chunks in the database. When a user asks a question, the system can look up the corresponding tag(s) in `tags.json` and use them to retrieve related information.
 
 ## Automatic Creation
+
 If `tags.json` is missing from the project directory, the application will automatically generate it at startup. The process works as follows:
 
 1. **Detection:** On startup, the application checks if `tags.json` exists in the working directory.
@@ -12,6 +14,7 @@ If `tags.json` is missing from the project directory, the application will autom
 4. **File Creation:** The resulting mapping is saved as `tags.json` in the project directory.
 
 ## Example Structure
+
 ```json
 {
   "Financial Docs": {
@@ -25,12 +28,15 @@ If `tags.json` is missing from the project directory, the application will autom
 ```
 
 ## Usage
+
 - When a user asks a question, the system checks `tags.json` for matching or related intents.
 - The corresponding tag(s) are used to search the document database for relevant content.
 - This enables more accurate and intent-driven retrieval in RAG workflows.
 
 ## Regeneration
+
 To force regeneration, simply delete `tags.json` and restart the application.
 
 ---
-*This file documents the creation and role of `tags.json` in the RAG search workflow.*
+
+_This file documents the creation and role of `tags.json` in the RAG search workflow._

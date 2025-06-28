@@ -39,11 +39,12 @@ namespace localRAG.Utilities
                     {
                         var docid = await memoryConnector.ImportDocumentAsync(new Document(fileId)
                                                                         .AddFile(file),
-                                                                steps: [Constants.PipelineStepsExtract,
+                                                                        steps: [
+                                                                            Constants.PipelineStepsExtract,
                                                                             "generate_tags",
-                                                                        Constants.PipelineStepsPartition,
-                                                                        Constants.PipelineStepsGenEmbeddings,
-                                                                        Constants.PipelineStepsSaveRecords,
+                                                                            Constants.PipelineStepsPartition,
+                                                                            Constants.PipelineStepsGenEmbeddings,
+                                                                            Constants.PipelineStepsSaveRecords,
                                                                             //"manage_tags"
                                                                         ],
                                                                     context: context);
@@ -190,7 +191,7 @@ namespace localRAG.Utilities
                                 SourceName = result.SourceName,
                                 PartitionNumber = partition.PartitionNumber,
                                 Content = partition.Text,
-                                Score = partition.Relevance
+                                Score = float.IsNaN(partition.Relevance) || float.IsInfinity(partition.Relevance) ? 0 : partition.Relevance
                             };
                             documents.Add(doc);
                         }
@@ -258,6 +259,9 @@ namespace localRAG.Utilities
             // find related partitions in the copy and add the adjacent partitions according to the documentid and partition number
             for (int i = 0; i < partCollection.Count; i++)
             {
+                // Add index and count checks to prevent out-of-range exceptions
+                if (i >= copy.Results.Count) continue;
+                if (partCollection[i]?.Results == null) continue;
                 foreach (var part in partCollection[i].Results)
                 {
                     foreach (var partition in part.Partitions)

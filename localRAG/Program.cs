@@ -71,7 +71,7 @@ namespace localRAG
             if (!File.Exists(tagsPath))
             {
                 Console.WriteLine("tags.json not found. Generating tags.json...");
-                await GenerateTagsJson(tagsPath);
+                await GenerateTagsJsonAsync(tagsPath);
                 Console.WriteLine("tags.json created.");
             }
 
@@ -111,8 +111,39 @@ namespace localRAG
             // ==================================
 
             // Load the Kernel Memory plugin into Semantic Kernel.
-            var memoryConnector = Helpers.GetMemoryConnector<MemoryServerless>(serverless: true, useAzure: true, debug:DEBUG_MEMORY);
-            memoryConnector.Orchestrator.AddHandler<GenerateTagsHandler>("generate_tags"); // this adds tags according to its content
+            var memoryConnector = Helpers.GetMemoryConnector<MemoryServerless>(serverless: true, useAzure: true, debug: DEBUG_MEMORY);
+
+            // Read existing tags for handler initialization
+            Dictionary<string, Dictionary<string, List<string>>> mainTags = new();
+            if (File.Exists(tagsPath))
+            {
+                try
+                {
+                    var existingTagsJson = await File.ReadAllTextAsync(tagsPath);
+                    var deserializedTags = JsonSerializer.Deserialize<Dictionary<string, List<string>>>(existingTagsJson);
+
+                    if (deserializedTags != null)
+                    {
+                        // Convert to the required format for the handler
+                        foreach (var tag in deserializedTags.Where(t => !string.IsNullOrWhiteSpace(t.Key)))
+                        {
+                            mainTags[tag.Key!] = new Dictionary<string, List<string>>();
+                        }
+                    }
+                }
+                catch (JsonException ex)
+                {
+                    Console.WriteLine($"Error reading existing tags: {ex.Message}. Using empty tags dictionary.");
+                }
+            }
+
+            // Properly register the handler with the required parameters
+            memoryConnector.Orchestrator.AddHandler(new GenerateTagsHandler(
+                "generate_tags",
+                memoryConnector.Orchestrator,
+                mainTags
+            ));
+
             //memoryConnector.Orchestrator.AddHandler<ManageTagHandler>("manage_tags"); 
 
             // =======================
@@ -134,7 +165,7 @@ namespace localRAG
             // === LOAD DOCUMENTS INTO MEMORY ===
             // ==================================
 
-            await ImportDocuments(kernel35, memoryConnector, promptPlugins);
+            await ImportDocumentsAsync(kernel35, memoryConnector, promptPlugins);
             //await CreateIntentionsAsync(memoryConnector);
 
             // ==================================
@@ -180,7 +211,7 @@ namespace localRAG
             searchRAGStep_sub
                 .OnEvent(LookupKernelmemoriesStep.OutputEvents.IndexesRemoved)
                 .SendEventTo(new ProcessFunctionTargetBuilder(chatUserInputStep));
-            
+
             var process = mainProcess.Build();
 
             if (false)
@@ -203,77 +234,195 @@ namespace localRAG
 
         }
 
-        private static async Task ImportDocuments(Kernel kernel, MemoryServerless memoryConnector, KernelPlugin prompts)
+        private static async Task ImportDocumentsAsync(Kernel kernel, MemoryServerless memoryConnector, KernelPlugin prompts)
         {
             var tags = await LongtermMemoryHelper.LoadAndStorePdfFromPathAsync(memoryConnector, IMPORT_PATH);
             if (true)
             {            // I want to have each distinct tag as a list of tags / the key itself is also a tag
                 var listOfTags = new Dictionary<string, List<string>>();
-                foreach (var tag in tags)
+                foreach (var tag in tags.Where(t => !string.IsNullOrWhiteSpace(t.Key)))
                 {
-                    if (!listOfTags.ContainsKey(tag.Key))
+                    if (!listOfTags.ContainsKey(tag.Key!))
                     {
-                        listOfTags[tag.Key] = new List<string>();
+                        listOfTags[tag.Key!] = new List<string>();
                     }
-                    foreach (var value in tag.Value)
+
+                    if (tag.Value != null)
                     {
-                        if (!listOfTags.ContainsKey(value))
+                        foreach (var value in tag.Value.Where(v => !string.IsNullOrWhiteSpace(v)))
                         {
-                            listOfTags[value] = new List<string>();
+                            if (!listOfTags.ContainsKey(value!))
+                            {
+                                listOfTags[value!] = new List<string>();
+                            }
                         }
                     }
                 }
-                var result = await kernel.InvokeAsync<string>(prompts["IntentsPlugin"], new() { ["input"] = JsonSerializer.Serialize(listOfTags) });
-                var intentListWithQuestions = result.Replace("```json\n", "").Replace("```", "").Trim();
-                var tagCollection = JsonSerializer.Deserialize<Dictionary<string, List<string?>>>(intentListWithQuestions);
-            }
 
-    
+                var result = await kernel.InvokeAsync<string>(prompts["IntentsPlugin"], new() { ["input"] = JsonSerializer.Serialize(listOfTags) });
+                if (result != null)
+                {
+                    var intentListWithQuestions = result.Replace("```json\n", "").Replace("```", "").Trim();
+                    var tagCollection = JsonSerializer.Deserialize<Dictionary<string, List<string?>>>(intentListWithQuestions);
+
+                    if (tagCollection != null)
+                    {
+                        Console.WriteLine($"Generated {tagCollection.Count} tag collections with questions");
+                    }
+                }
+            }
         }
-    
+
         private static async Task CreateIntentionsAsync(IKernelMemory kernelMemory)
         {
-           var tags = await Helpers.ReadTagsFromFile();
-           await LongtermMemoryHelper.CreateIntents(kernelMemory , tags);
+            var tags = await Helpers.ReadTagsFromFile();
+            await LongtermMemoryHelper.CreateIntents(kernelMemory, tags);
         }
 
         /// <summary>
         /// Generates the tags.json file by extracting tags and related questions from imported documents.
-        /// Avoids duplicate questions within each tag.
+        /// Handles tag generation, deduplication, and incremental updates across document imports.
         /// </summary>
         /// <param name="tagsPath">The path where tags.json will be created.</param>
-        private static async Task GenerateTagsJson(string tagsPath)
+        private static async Task GenerateTagsJsonAsync(string tagsPath)
         {
+            // Validate import path
+            if (!Directory.Exists(IMPORT_PATH) || Directory.GetFiles(IMPORT_PATH).Length == 0)
+            {
+                Console.WriteLine($"No documents found in {IMPORT_PATH}. Cannot generate tags.");
+                return;
+            }
+
             var memoryConnector = Helpers.GetMemoryConnector<MemoryServerless>(serverless: true, useAzure: true, debug: DEBUG_MEMORY);
+
+            // Read or initialize tags dictionary
+            var existingTags = new Dictionary<string, HashSet<string>>();
+            Dictionary<string, Dictionary<string, List<string>>> mainTags = new();
+
+            if (File.Exists(tagsPath))
+            {
+                try
+                {
+                    var existingTagsJson = await File.ReadAllTextAsync(tagsPath);
+                    var deserializedTags = JsonSerializer.Deserialize<Dictionary<string, List<string>>>(existingTagsJson);
+
+                    if (deserializedTags != null)
+                    {
+                        existingTags = deserializedTags
+                            .Where(kvp => !string.IsNullOrWhiteSpace(kvp.Key))
+                            .ToDictionary(
+                                kvp => kvp.Key,
+                                kvp => new HashSet<string>(kvp.Value ?? Enumerable.Empty<string>())
+                            );
+
+                        // Convert to the required format for the handler
+                        foreach (var tag in deserializedTags.Where(t => !string.IsNullOrWhiteSpace(t.Key)))
+                        {
+                            mainTags[tag.Key!] = new Dictionary<string, List<string>>();
+                        }
+                    }
+                }
+                catch (JsonException ex)
+                {
+                    Console.WriteLine($"Error reading existing tags: {ex.Message}. Starting with empty tags.");
+                }
+            }
+
+            // IMPORTANT: Register the handler with proper parameters BEFORE attempting to load documents
+            memoryConnector.Orchestrator.AddHandler(new GenerateTagsHandler(
+                "generate_tags",
+                memoryConnector.Orchestrator,
+                mainTags
+            ));
+
             var kernel = Helpers.GetSemanticKernel(debug: DEBUG_KERNEL);
             var prompts = kernel.ImportPluginFromPromptDirectory(Path.Combine(Directory.GetCurrentDirectory(), "Plugins/Prompts"));
-            var tags = await LongtermMemoryHelper.LoadAndStorePdfFromPathAsync(memoryConnector, IMPORT_PATH);
-            var listOfTags = new Dictionary<string, HashSet<string>>();
-            foreach (var tag in tags)
+
+            // Now that the handler is registered, load and process the documents
+            Console.WriteLine("Loading and processing documents from: " + IMPORT_PATH);
+            var documentTags = await LongtermMemoryHelper.LoadAndStorePdfFromPathAsync(memoryConnector, IMPORT_PATH);
+            Console.WriteLine($"Successfully processed documents. Found {documentTags.Count} document tags.");
+
+            // Prepare tag collection, combining existing and new tags
+            var combinedTags = new Dictionary<string, HashSet<string>>(existingTags);
+            foreach (var docTag in documentTags.Where(dt => !string.IsNullOrWhiteSpace(dt.Key)))
             {
-                if (!listOfTags.ContainsKey(tag.Key))
+                // Safely add document key as a tag if not exists
+                if (!combinedTags.ContainsKey(docTag.Key!))
                 {
-                    listOfTags[tag.Key] = new HashSet<string>();
+                    combinedTags[docTag.Key!] = new HashSet<string>();
                 }
-                foreach (var value in tag.Value)
+
+                // Safely add document values as tags
+                if (docTag.Value != null)
                 {
-                    if (!listOfTags.ContainsKey(value))
+                    foreach (var value in docTag.Value.Where(v => !string.IsNullOrWhiteSpace(v)))
                     {
-                        listOfTags[value] = new HashSet<string>();
+                        if (!combinedTags.ContainsKey(value!))
+                        {
+                            combinedTags[value!] = new HashSet<string>();
+                        }
                     }
                 }
             }
+
             // Generate questions/intents for tags
-            var result = await kernel.InvokeAsync<string>(prompts["IntentsPlugin"], new() { ["input"] = JsonSerializer.Serialize(listOfTags.ToDictionary(kv => kv.Key, kv => kv.Value.ToList())) });
-            var intentListWithQuestions = result.Replace("```json\n", "").Replace("```", "").Trim();
-            // Parse and deduplicate questions within each tag
-            var tagCollection = JsonSerializer.Deserialize<Dictionary<string, List<string>>>(intentListWithQuestions);
-            var deduped = new Dictionary<string, List<string>>();
-            foreach (var kv in tagCollection)
+            var tagSerializationInput = combinedTags
+                .Where(kv => !string.IsNullOrWhiteSpace(kv.Key))
+                .ToDictionary(
+                    kv => kv.Key!,
+                    kv => kv.Value.ToList()
+                );
+
+            Console.WriteLine("Generating questions for tags using IntentsPlugin...");
+            var result = await kernel.InvokeAsync<string>(
+                prompts["IntentsPlugin"],
+                new() { ["input"] = JsonSerializer.Serialize(tagSerializationInput) }
+            );
+
+            // Clean and parse generated tag questions, with null checks
+            var intentListWithQuestions = result?
+                .Replace("```json\n", "")
+                .Replace("```", "")
+                .Trim() ?? string.Empty;
+
+            var generatedTagCollection = JsonSerializer.Deserialize<Dictionary<string, List<string>>>(intentListWithQuestions)
+                ?? new Dictionary<string, List<string>>();
+
+            // Merge and deduplicate tags
+            var mergedTags = new Dictionary<string, HashSet<string>>(existingTags);
+            foreach (var kvp in generatedTagCollection.Where(k => !string.IsNullOrWhiteSpace(k.Key)))
             {
-                deduped[kv.Key] = new List<string>(new HashSet<string>(kv.Value));
+                if (!mergedTags.ContainsKey(kvp.Key!))
+                {
+                    mergedTags[kvp.Key!] = new HashSet<string>();
+                }
+
+                // Add new unique questions to existing tag questions
+                if (kvp.Value != null)
+                {
+                    mergedTags[kvp.Key!].UnionWith(
+                        kvp.Value
+                            .Where(q => !string.IsNullOrWhiteSpace(q))
+                    );
+                }
             }
-            await File.WriteAllTextAsync(tagsPath, JsonSerializer.Serialize(deduped, new JsonSerializerOptions { WriteIndented = true }));
+
+            // Prepare tags for serialization (convert HashSet back to List)
+            var tagsForSerialization = mergedTags
+                .Where(kv => !string.IsNullOrWhiteSpace(kv.Key))
+                .ToDictionary(
+                    kvp => kvp.Key!,
+                    kvp => kvp.Value.ToList()
+                );
+
+            // Write updated tags to file
+            await File.WriteAllTextAsync(
+                tagsPath,
+                JsonSerializer.Serialize(tagsForSerialization, new JsonSerializerOptions { WriteIndented = true })
+            );
+
+            Console.WriteLine($"Tags generated and saved to {tagsPath}. Total unique tags: {tagsForSerialization.Count}");
         }
     }
 }
