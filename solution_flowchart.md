@@ -1,6 +1,7 @@
 # Solution Flowchart: Main Use Case – User Asks a Question
 
 **Related documentation:**
+
 - [README](README.md)
 - [Solution Overview](solution.md)
 - [Main Process Flow](Process_main.md)
@@ -21,7 +22,8 @@ flowchart TD
     RS --> HC["Program.cs: Main()-Call Semantic Kernel (Azure OpenAI, Plugins)"]
     HC --> SR["Program.cs: Main()-Source Attribution, Truncate, Format"]
     CH --> SR
-    SR --> RO["Program.cs: Main()-Render Output to User"]
+    SR --> FC["ResponseStepWithHalluCheck.cs: Self-Critique LLM Fact-Check"]
+    FC --> RO["Program.cs: Main()-Render Output to User"]
     RO --> UA
 
     subgraph "Process Definition (Program.cs, ProcessBuilder)"
@@ -53,11 +55,12 @@ flowchart TD
 - **Process/Steps/StepLookupKernelMemory.cs** — If RAG, searches Kernel Memory for relevant information.
 - **Process/Steps/StepRenderResponses.cs** — If not RAG, fetches from chat history or other sources.
 - **Program.cs: Main()** — Calls Semantic Kernel, Azure OpenAI, and plugins to generate the answer.
+- **ResponseStepWithHalluCheck.cs: Self-Critique LLM Fact-Check** — If no context is found, the answer is fact-checked by the LLM itself and a warning is added if needed.
 - **Program.cs: Main()** — Formats the answer, adds source attribution, truncates if needed.
 - **Program.cs: Main()** — Renders the output back to the user.
 - **Process Definition (Program.cs, ProcessBuilder)** — The process, including user input and sub-steps, is defined and orchestrated in `Program.cs` using `ProcessBuilder` and step classes in `Process/Steps/`.
 
-This flowchart now includes the process definition as a side flow, clarifying how the user input step and its sub-steps are structured and orchestrated.
+This flowchart now includes the self-critique step for answers without context, clarifying how the system checks for hallucinations before rendering the response.
 
 # Kernel Memory Call Flowchart: Answering a User Question
 
@@ -79,7 +82,8 @@ flowchart TD
     RC --> SK["Semantic Kernel (Helpers.cs: GetSemanticKernel())"]
     SK --> AO["Azure OpenAI (Prompt, Plugins)"]
     AO --> FR["Format & Respond (Program.cs)"]
-    FR --> UA
+    FR --> FC["ResponseStepWithHalluCheck.cs: Self-Critique LLM Fact-Check"]
+    FC --> UA
 
     subgraph "Kernel Memory"
         MC
@@ -112,5 +116,6 @@ flowchart TD
 - **Semantic Kernel** — Orchestrates prompt execution, plugins, and context assembly.
 - **Azure OpenAI** — Generates the final answer using the retrieved context.
 - **Format & Respond** — Formats the answer and returns it to the user.
+- **ResponseStepWithHalluCheck.cs: Self-Critique LLM Fact-Check** — If no context is found, the answer is fact-checked by the LLM itself and a warning is added if needed.
 
-This chart details the RAG (Kernel Memory) path, showing how a user question is processed, how relevant knowledge is retrieved, and how the answer is generated and returned.
+This chart details the RAG (Kernel Memory) path, showing how a user question is processed, how relevant knowledge is retrieved, and how the answer is generated and returned, including the new hallucination check step.

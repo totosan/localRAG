@@ -24,6 +24,7 @@ namespace localRAG.Process.Steps
         [KernelFunction(Functions.RewriteAsk)]
         public async Task RewriteAskAsync(KernelProcessStepContext context, string userInput, Kernel _kernel)
         {
+            Console.WriteLine("[DEBUG] Step: RewriteAskStep - RewriteAskAsync called");
             var logger = _kernel.GetRequiredService<ILogger<RewriteAskStep>>();
             var chatHist = await _kernel.GetHistory().GetHistoryAsync();
             var kernel = _kernel;
@@ -49,6 +50,7 @@ namespace localRAG.Process.Steps
                 {
                     rewrittenQuestions = rewrittenQuestions.OrderByDescending(x => x.Score).ToList();
                 }
+                logger.LogInformation("[DEBUG] Step: RewriteAskStep - Rewritten questions produced");
             }
             catch (System.Exception e)
             {

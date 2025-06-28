@@ -5,6 +5,7 @@ localRAG is a modular, extensible Retrieval-Augmented Generation (RAG) system de
 ---
 
 **See also:**
+
 - [Solution Overview](solution.md)
 - [Solution Flowcharts](solution_flowchart.md)
 - [Main Process Flow](Process_main.md)
@@ -121,6 +122,7 @@ flowchart LR
 ## Getting Started
 
 ### Requirements
+
 - [.NET 8 or 9 SDK](https://dotnet.microsoft.com/en-us/download)
 - [Docker & Docker Compose](https://docs.docker.com/get-docker/)
 - (Optional) Azure account for Azure OpenAI and Cognitive Search
@@ -137,6 +139,7 @@ docker compose -f localRAG/docker-compose.yml up -d
 ```
 
 You can check the status with:
+
 ```sh
 docker compose -f localRAG/docker-compose.yml ps
 ```

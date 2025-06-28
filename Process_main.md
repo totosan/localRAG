@@ -1,6 +1,7 @@
 # Main Process Flow: User Input as a Process Step
 
 **Related documentation:**
+
 - [README](README.md)
 - [Solution Overview](solution.md)
 - [Solution Flowcharts](solution_flowchart.md)
@@ -14,6 +15,7 @@ This document describes the main workflow of the localRAG application, focusing 
 - The process is defined and started in `Program.cs`.
 - The workflow is constructed in `ProcessSearch.cs` using a `ProcessBuilder`.
 - Each step in the process corresponds to a specific function, such as rewriting the user's question, routing, searching memory, and rendering responses.
+- **New:** If no context is found for a user question, the system uses a self-critique LLM prompt to fact-check the answer and warn about possible hallucinations.
 
 ## Main Steps in the Process
 
@@ -43,6 +45,7 @@ This document describes the main workflow of the localRAG application, focusing 
 6. **Get Chat Response**
 
    - Based on the routing decision, the system generates a response using either retrieved memory or chat history (`ResponseStep`).
+   - **New:** If no context chunks are found, the system runs a self-critique LLM prompt to check if the answer is factual and verifiable. If not, a warning is added to the response.
 
 7. **Render Response**
 
@@ -75,6 +78,9 @@ This document describes the main workflow of the localRAG application, focusing 
 [Get Chat Response]     |
      |                  /
      v                 /
+[Self-Critique LLM Fact-Check?]  # <--- New step for no-context answers
+     |
+     v
 [Render Response]<----´
      |
      v

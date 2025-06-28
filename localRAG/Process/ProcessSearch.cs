@@ -1,4 +1,3 @@
-
 using localRAG.Process.StepEvents;
 using localRAG.Process.Steps;
 using Microsoft.KernelMemory;
@@ -19,7 +18,7 @@ namespace localRAG.Process
                            Please first come up with a plan and then execute it. You can ask for help if you are stuck.
                            Always respond with the source' name and partition nr in Format [DocName:PartitionNr] if you provide information from a document.
                            """;
-        internal static SearchData _searchState { get; set; }
+        internal static SearchData? _searchState { get; set; }
 
         public static ProcessBuilder CreateProcess()
         {
@@ -29,13 +28,13 @@ namespace localRAG.Process
             var rewriteStep = processBuilder.AddStepFromType<Steps.RewriteAskStep>();
             var routingStep = processBuilder.AddStepFromType<Steps.RoutingStep>();
             var ragSearchStep = processBuilder.AddStepFromType<Steps.LookupKernelmemoriesStep>();
-            var responseStep = processBuilder.AddStepFromType<Steps.ResponseStep>();
+            var responseStep = processBuilder.AddStepFromType<Steps.ResponseStepWithHalluCheck>();
             var renderStep = processBuilder.AddStepFromType<Steps.RenderResponsesStep>();
 
             processBuilder
                 .OnInputEvent(RewriteAskStep.OutputEvents.RewriteUsersAskSend)
                 .SendEventTo(new ProcessFunctionTargetBuilder(rewriteStep, parameterName: "userInput"));
-            
+
             processBuilder
                 .OnInputEvent(ChatUserInputStep.OutputEvents.ReimportDocumentsSend)
                 .SendEventTo(new ProcessFunctionTargetBuilder(ragSearchStep, LookupKernelmemoriesStep.Functions.RemoveIndex));
@@ -65,10 +64,10 @@ namespace localRAG.Process
 
     public class SearchData
     {
-        public ChatHistory ChatHistory { get; set; }
+        public ChatHistory? ChatHistory { get; set; }
         public string UserMessage { get; set; } = string.Empty;
         public List<UserAsk> StandaloneQuestions { get; set; } = new();
-        public List<string> Intents { get; internal set; }
+        public List<string>? Intents { get; internal set; }
     }
 #pragma warning restore SKEXP0080 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 }

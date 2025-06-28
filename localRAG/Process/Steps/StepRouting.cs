@@ -31,6 +31,7 @@ namespace localRAG.Process.Steps
         [KernelFunction(Functions.RoutingStep)]
         public async Task RouteAsync(KernelProcessStepContext context, SearchData searchData, Kernel _kernel)
         {
+            Console.WriteLine("[DEBUG] Step: RoutingStep - RouteAsync called");
             var historyProvider = _kernel.GetHistory();
             var history = await historyProvider.GetHistoryAsync();
             var kernel35 = Helpers.GetSemanticKernel(weakGpt: true);
@@ -48,6 +49,7 @@ namespace localRAG.Process.Steps
 
                 rag_search = ragAsk.Replace("```json\n", "").Replace("```", "").Trim().Contains("true", StringComparison.OrdinalIgnoreCase);
                 logger.LogInformation("Rag search: " + (rag_search ? "yes" : "no"));
+                logger.LogInformation("[DEBUG] Step: RoutingStep - RAG search decision: " + (rag_search ? "yes" : "no"));
             }
 
             if (rag_search)
@@ -58,7 +60,7 @@ namespace localRAG.Process.Steps
             else
             {
                 // emit event: route
-                await context.EmitEventAsync(new KernelProcessEvent { Id = OutputEvents.NoRagSearchNeeded, Data= searchData, Visibility = KernelProcessEventVisibility.Public });
+                await context.EmitEventAsync(new KernelProcessEvent { Id = OutputEvents.NoRagSearchNeeded, Data = searchData, Visibility = KernelProcessEventVisibility.Public });
             }
 
         }

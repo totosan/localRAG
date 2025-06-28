@@ -1,6 +1,7 @@
 # tags.json Creation and Purpose
 
 **Related documentation:**
+
 - [README](README.md)
 - [Solution Overview](solution.md)
 - [Solution Flowcharts](solution_flowchart.md)

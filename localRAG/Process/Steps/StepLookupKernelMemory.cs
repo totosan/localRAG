@@ -93,6 +93,8 @@ namespace localRAG.Process.Steps
         [KernelFunction(Functions.GetIntentOfAsk)]
         public async Task AskForIntentAsync(KernelProcessStepContext context, SearchData searchData)
         {
+            Console.WriteLine("[DEBUG] Step: LookupKernelmemoriesStep - AskForIntentAsync called");
+
             if (_state?.MemoryConnector == null)
             {
                 _logger.LogError("Memory connector is not initialized");
@@ -109,6 +111,8 @@ namespace localRAG.Process.Steps
         [KernelFunction(Functions.GetMemoryData)]
         public async Task GetFromMemoryAsync(KernelProcessStepContext context, SearchData searchData, Kernel _kernel)
         {
+            Console.WriteLine("[DEBUG] Step: LookupKernelmemoriesStep - GetFromMemoryAsync called");
+
             if (_state?.MemoryConnector == null)
             {
                 _logger.LogError("Memory connector is not initialized");

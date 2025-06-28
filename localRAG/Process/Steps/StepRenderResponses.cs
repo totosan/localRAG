@@ -13,6 +13,7 @@ namespace localRAG.Process.Steps
         [KernelFunction(Functions.RenderResponses)]
         public async Task RenderResponsesAsync(KernelProcessStepContext context, string? responseToRender, Kernel _kernel)
         {
+            Console.WriteLine("[DEBUG] Step: RenderResponsesStep - RenderResponsesAsync called");
             if (responseToRender != null)
             {
                 System.Console.ForegroundColor = ConsoleColor.Yellow;

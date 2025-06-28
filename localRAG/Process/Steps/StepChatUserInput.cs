@@ -53,6 +53,7 @@ public class ChatUserInputStep : KernelProcessStep<UserInputState>
     [KernelFunction(Functions.GetUserInput)]
     public virtual async ValueTask GetUserInputAsync(KernelProcessStepContext context, Kernel _kernel)
     {
+        Console.WriteLine("[DEBUG] Step: ChatUserInputStep - GetUserInputAsync called");
         Console.WriteLine("---------");
         Console.WriteLine("Enter a question or type 'exit' to quit:");
         var userInput = Console.ReadLine()?.Trim();
@@ -83,7 +84,7 @@ public class ChatUserInputStep : KernelProcessStep<UserInputState>
                         await context.EmitEventAsync(new() { Id = OutputEvents.ClearChatHistorySend });
                         return;
                     case "/gi":
-                    case "/GenerateIntents":
+                    case "/generateintents":
                         await context.EmitEventAsync(new() { Id = OutputEvents.GenerateIntentsSend });
                         return;
                     case "/h":
@@ -91,7 +92,7 @@ public class ChatUserInputStep : KernelProcessStep<UserInputState>
                         Console.WriteLine("Commands:");
                         Console.WriteLine("\t/exit - Exit the program");
                         Console.WriteLine("\t/clear - Clear the chat history");
-                        Console.WriteLine("\t/removeIndex - Delete all indexes");
+                        Console.WriteLine("\t/removeindex - Delete all indexes");
                         Console.WriteLine("\t/reimport - Reimport all documents");
                         await context.EmitEventAsync(new() { Id = OutputEvents.ChatLoopSend });
                         return;
