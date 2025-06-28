@@ -1,379 +1,42 @@
 {
-  "ID & Vital Records": {
-    "Geburtsurkunden": [
-      "Wo finde ich meine Geburtsurkunden?",
-      "Wie erhalte ich eine Kopie meiner Geburtsurkunden?",
-      "Welche Informationen sind in meiner Geburtsurkunden enthalten?",
-      "Brauche ich meine Geburtsurkunden für die Einschulung?",
-      "Geburtsurkunde"
-    ],
-    "Sozialversicherungsausweise": [
-      "Wie bekomme ich meinen Sozialversicherungsausweis?",
-      "Wo wird mein Sozialversicherungsausweis aufbewahrt?",
-      "Wie ersetze ich einen verlorenen Sozialversicherungsausweis?",
-      "Wird mein Sozialversicherungsausweis für die Beschäftigung benötigt?",
-      "Sozialversicherungsausweis"
-    ],
-    "Reisepässe": [
-      "Welche Dokumente benötige ich für Reisepässe?",
-      "Wie erneuere ich meinen Reisepass?",
-      "Wo kann ich einen neuen Reisepass beantragen?",
-      "Wie lange ist mein Reisepass gültig?",
-      "Reisepass"
-    ],
-    "Heiratsurkunden": [
-      "Wo ist meine Heiratsurkunde?",
-      "Wie erhalte ich eine Kopie meiner Heiratsurkunde?",
-      "Wird meine Heiratsurkunde für eine Namensänderung benötigt?",
-      "Wie überprüfe ich die Echtheit meiner Heiratsurkunde?",
-      "Heiratsurkunde"
-    ],
-    "Scheidungsurkunden": [
-      "Wie erhalte ich meine Scheidungsurkunden?",
-      "Wo sind meine Scheidungsurkunden abgelegt?",
-      "Welche Details sind in meiner Scheidungsurkunde enthalten?",
-      "Brauche ich meine Scheidungsurkunde für eine Wiederheirat?",
-      "Scheidungsurkunde"
-    ]
-  },
-  "Financial Docs": {
-    "Kontoauszüge": [
-      "Wie kann ich auf meine Kontoauszüge zugreifen?",
-      "Wo werden meine Kontoauszüge aufbewahrt?",
-      "Wie oft werden Kontoauszüge ausgestellt?",
-      "Kann ich digitale Kopien meiner Kontoauszüge erhalten?",
-      "Kontoauszug"
-    ],
-    "Anlageauszüge": [
-      "Wo sind meine Anlageauszüge?",
-      "Wie überprüfe ich meine Anlageauszüge?",
-      "Welche Informationen sind in meinen Anlageauszügen enthalten?",
-      "Wie kann ich die Leistung meiner Anlageauszüge verfolgen?",
-      "Anlageauszug"
-    ],
-    "Steuererklärungen": [
-      "Was benötige ich für Steuererklärungen?",
-      "Wo finde ich meine Steuererklärungen?",
-      "Wie reiche ich meine Steuererklärungen online ein?",
-      "Was ist die Frist für die Einreichung von Steuererklärungen?",
-      "Steuererklärung"
-    ],
-    "Gehaltsabrechnungen": [
-      "Wo finde ich meine Gehaltsabrechnungen?",
-      "Wie greife ich auf meine Gehaltsabrechnungen zu?",
-      "Welche Abzüge sind auf meiner Gehaltsabrechnung aufgeführt?",
-      "Wie oft werden Gehaltsabrechnungen ausgestellt?",
-      "Gehaltsabrechnung"
-    ],
-    "Kreditverträge": [
-      "Wie überprüfe ich meine Kreditverträge?",
-      "Was sind die Bedingungen meiner Kreditverträge?",
-      "Wie kann ich meine Kreditverträge neu verhandeln?",
-      "Was passiert, wenn ich meine Kreditverträge nicht erfülle?",
-      "Kreditvertrag"
-    ]
-  },
-  "Property & Real Estate": {
-    "Grundbuchauszüge": [
-      "Wo ist mein Grundbuchauszug?",
-      "Wie erhalte ich meinen Grundbuchauszug?",
-      "Welche Informationen sind in meinem Grundbuchauszug enthalten?",
-      "Wie aktualisiere ich meinen Grundbuchauszug?",
-      "Grundbuchauszug"
-    ],
-    "Hypothekenunterlagen": [
-      "Wie überprüfe ich meine Hypothekenunterlagen?",
-      "Was sind die Details meiner Hypothekenunterlagen?",
-      "Wie kann ich meine Hypothekenunterlagen refinanzieren?",
-      "Wie hoch ist der Zinssatz meiner Hypothekenunterlagen?",
-      "Hypothekenunterlage"
-    ],
-    "Mietverträge": [
-      "Was sind die Bedingungen meines Mietvertrags?",
-      "Wo finde ich meinen Mietvertrag?",
-      "Wie kündige ich meinen Mietvertrag?",
-      "Wie lang ist die Kündigungsfrist meines Mietvertrags?",
-      "Mietvertrag"
-    ],
-    "Grundsteuerbescheide": [
-      "Wo finde ich meinen Grundsteuerbescheid?",
-      "Wie greife ich auf meinen Grundsteuerbescheid zu?",
-      "Was ist die Zahlungsfrist für meinen Grundsteuerbescheid?",
-      "Wie wird mein Grundsteuerbescheid berechnet?",
-      "Grundsteuerbescheid"
-    ],
-    "Renovierungsbelege": [
-      "Wie dokumentiere ich meine Renovierungsbelege?",
-      "Wo werden meine Renovierungsbelege aufbewahrt?",
-      "Welche Ausgaben sind in meinen Renovierungsbelegen enthalten?",
-      "Wie beantrage ich Steuerabzüge für meine Renovierungsbelege?",
-      "Renovierungsbeleg"
-    ],
-    "Bemusterungsunterlagen": [
-      "Was sind Bemusterungsunterlagen?",
-      "Wie erhalte ich meine Bemusterungsunterlagen?",
-      "Welche Informationen sind in meinen Bemusterungsunterlagen enthalten?",
-      "Wie aktualisiere ich meine Bemusterungsunterlagen?",
-      "Bemusterungsunterlage"
-    ],
-    "Bauverträge": [
-      "Wo finde ich meinen Bauvertrag?",
-      "Was sind die Bedingungen meines Bauvertrags?",
-      "Wie kündige ich meinen Bauvertrag?",
-      "Wie verhandle ich meinen Bauvertrag?",
-      "Bauvertrag"
-    ],
-    "Baupläne": [
-      "Wo sind meine Baupläne?",
-      "Wie erhalte ich Kopien meiner Baupläne?",
-      "Welche Informationen sind in meinen Bauplänen enthalten?",
-      "Wie aktualisiere ich meine Baupläne?",
-      "Bauplan"
-    ],
-    "Abnahmeprotokolle": [
-      "Was sind Abnahmeprotokolle?",
-      "Wie erhalte ich meine Abnahmeprotokolle?",
-      "Welche Informationen sind in meinen Abnahmeprotokollen enthalten?",
-      "Wie dokumentiere ich die Abnahme?",
-      "Abnahmeprotokoll"
-    ]
-  },
-  "Insurance": {
-    "Krankenversicherungen": [
-      "Was deckt meine Krankenversicherung ab?",
-      "Wie reiche ich einen Anspruch bei meiner Krankenversicherung ein?",
-      "Wie hoch ist die Prämie meiner Krankenversicherung?",
-      "Wie füge ich Angehörige zu meiner Krankenversicherung hinzu?",
-      "Krankenversicherung"
-    ],
-    "Hausrat-/Haftpflichtversicherungen": [
-      "Wie kann ich einen Anspruch bei meiner Hausrat-/Haftpflichtversicherung einreichen?",
-      "Was sind die Details meiner Hausrat-/Haftpflichtversicherung?",
-      "Was ist in meiner Hausrat-/Haftpflichtversicherung abgedeckt?",
-      "Wie erneuere ich meine Hausrat-/Haftpflichtversicherung?",
-      "Hausratversicherung"
-    ],
-    "Kfz-Versicherungen": [
-      "Habe ich eine Kfz-Versicherung?",
-      "Wie erneuere ich meine Kfz-Versicherung?",
-      "Wie hoch ist der Selbstbehalt meiner Kfz-Versicherung?",
-      "Wie reiche ich einen Anspruch bei meiner Kfz-Versicherung ein?",
-      "Kfz-Versicherung"
-    ],
-    "Lebensversicherungen": [
-      "Was sind die Details meiner Lebensversicherung?",
-      "Wie aktualisiere ich meine Lebensversicherung?",
-      "Wie hoch ist die Auszahlung meiner Lebensversicherung?",
-      "Wie ändere ich den Begünstigten meiner Lebensversicherung?",
-      "Lebensversicherung"
-    ],
-    "Berufsunfähigkeitsversicherungen": [
-      "Wie beantrage ich eine Berufsunfähigkeitsversicherung?",
-      "Was deckt meine Berufsunfähigkeitsversicherung ab?",
-      "Wie reiche ich einen Anspruch bei meiner Berufsunfähigkeitsversicherung ein?",
-      "Wie lange ist die Wartezeit meiner Berufsunfähigkeitsversicherung?",
-      "Berufsunfähigkeitsversicherung"
-    ]
-  },
-  "Medical Records": {
-    "Impfbescheinigungen": [
-      "Wann war meine letzte Impfbescheinigung?",
-      "Wie erhalte ich meine Impfbescheinigung?",
-      "Welche Impfungen sind in meiner Impfbescheinigung aufgeführt?",
-      "Wie aktualisiere ich meine Impfbescheinigung?",
-      "Impfbescheinigung"
-    ],
-    "Krankenakte": [
-      "Wie kann ich auf meine Krankenakte zugreifen?",
-      "Wo wird meine Krankenakte aufbewahrt?",
-      "Wie übertrage ich meine Krankenakte zu einem neuen Arzt?",
-      "Welche Informationen sind in meiner Krankenakte enthalten?",
-      "Krankenakte"
-    ],
-    "Rezeptinformationen": [
-      "Was sind meine aktuellen Rezeptinformationen?",
-      "Wie fülle ich meine Rezeptinformationen nach?",
-      "Wie ist die Dosierung meiner Rezeptinformationen?",
-      "Wie ändere ich meine Rezeptinformationen?",
-      "Rezeptinformation"
-    ],
-    "Arztkontakte": [
-      "Wer sind meine Arztkontakte?",
-      "Wie aktualisiere ich meine Arztkontakte?",
-      "Wie finde ich einen neuen Arztkontakt?",
-      "Wie lautet die Kontaktinformation für meine Arztkontakte?",
-      "Arztkontakt"
-    ],
-    "Versicherungsansprüche": [
-      "Wie reiche ich Versicherungsansprüche ein?",
-      "Was sind die Details meiner Versicherungsansprüche?",
-      "Wie verfolge ich meine Versicherungsansprüche?",
-      "Wie ist der Status meiner Versicherungsansprüche?",
-      "Versicherungsanspruch"
-    ]
-  },
-  "Legal Docs": {
-    "Testamente & Nachlässe": [
-      "Wo ist mein Testament & Nachlass?",
-      "Wie aktualisiere ich mein Testament & Nachlass?",
-      "Wer sind die Begünstigten in meinem Testament & Nachlass?",
-      "Wie erstelle ich ein neues Testament & Nachlass?",
-      "Testament"
-    ],
-    "Vollmachten": [
-      "Wie erteile ich Vollmachten?",
-      "Wo finde ich meine Vollmachten?",
-      "Welche Befugnisse sind in meinen Vollmachten enthalten?",
-      "Wie widerrufe ich meine Vollmachten?",
-      "Vollmacht"
-    ],
-    "Patientenverfügungen": [
-      "Was sind die Bedingungen meiner Patientenverfügung?",
-      "Wie erstelle ich eine Patientenverfügung?",
-      "Wer ist der designierte Entscheidungsträger in meiner Patientenverfügung?",
-      "Wie aktualisiere ich meine Patientenverfügung?",
-      "Patientenverfügung"
-    ],
-    "Verträge": [
-      "Wo finde ich meine Verträge?",
-      "Was sind die Bedingungen meiner Verträge?",
-      "Wie kündige ich meine Verträge?",
-      "Wie verhandle ich meine Verträge?",
-      "Vertrag"
-    ],
-    "Gerichtsbeschlüsse": [
-      "Wie greife ich auf Gerichtsbeschlüsse zu?",
-      "Wo sind meine Gerichtsbeschlüsse abgelegt?",
-      "Was ist das Ergebnis meiner Gerichtsbeschlüsse?",
-      "Wie lege ich Berufung gegen meine Gerichtsbeschlüsse ein?",
-      "Gerichtsbeschluss"
-    ]
-  },
-  "Ordnungswiedrigkeiten": {
-    "Bußgeldbescheide": [
-      "Was ist ein Bußgeldbescheid?",
-      "Wie lege ich Einspruch gegen einen Bußgeldbescheid ein?",
-      "Wie bezahle ich einen Bußgeldbescheid?",
-      "Wie lange habe ich Zeit, um einen Bußgeldbescheid zu bezahlen?",
-      "Bußgeldbescheid"
-    ],
-    "Verwarnungen": [
-      "Was ist eine Verwarnung?",
-      "Wie gehe ich mit einer Verwarnung um?",
-      "Kann ich gegen eine Verwarnung Einspruch einlegen?",
-      "Wie lange ist eine Verwarnung gültig?",
-      "Verwarnung"
-    ]
-  },
-  "Household & Utilities": {
-    "Strom-/Wasser-/Gasrechnungen": [
-      "Wie hoch sind meine Strom-/Wasser-/Gasrechnungen?",
-      "Wo finde ich meine Strom-/Wasser-/Gasrechnungen?",
-      "Wie bezahle ich meine Strom-/Wasser-/Gasrechnungen?",
-      "Was ist das Fälligkeitsdatum meiner Strom-/Wasser-/Gasrechnungen?",
-      "Stromrechnung"
-    ],
-    "Internet-/Kabelrechnungen": [
-      "Was ist meine Internet-/Kabelrechnung?",
-      "Wie bezahle ich meine Internet-/Kabelrechnung?",
-      "Welche Dienstleistungen sind in meiner Internet-/Kabelrechnung enthalten?",
-      "Wie bestreite ich Gebühren auf meiner Internet-/Kabelrechnung?",
-      "Internetrechnung"
-    ],
-    "Dienstleistungsverträge": [
-      "Wo sind meine Dienstleistungsverträge?",
-      "Was sind die Bedingungen meiner Dienstleistungsverträge?",
-      "Wie kündige ich meine Dienstleistungsverträge?",
-      "Wie erneuere ich meine Dienstleistungsverträge?",
-      "Dienstleistungsvertrag"
-    ],
-    "Garantieunterlagen": [
-      "Habe ich Garantieunterlagen?",
-      "Wie beanspruche ich meine Garantieunterlagen?",
-      "Welche Produkte sind durch meine Garantieunterlagen abgedeckt?",
-      "Wie verlängere ich meine Garantieunterlagen?",
-      "Garantieunterlage"
-    ],
-    "Wartungsunterlagen": [
-      "Wie behalte ich den Überblick über Wartungsunterlagen?",
-      "Wo werden meine Wartungsunterlagen aufbewahrt?",
-      "Welche Wartung ist gemäß meinen Wartungsunterlagen erforderlich?",
-      "Wie plane ich den Service basierend auf meinen Wartungsunterlagen?",
-      "Wartungsunterlage"
-    ]
-  },
-  "IT & Digital": {
-    "Softwarelizenzen": [
-      "Wo sind meine Softwarelizenzen?",
-      "Wie verwalte ich meine Softwarelizenzen?",
-      "Welche Software ist durch meine Softwarelizenzen abgedeckt?",
-      "Wie erneuere ich meine Softwarelizenzen?",
-      "Softwarelizenz"
-    ],
-    "Zugangsdaten": [
-      "Was sind meine Zugangsdaten?",
-      "Wie aktualisiere ich meine Zugangsdaten?",
-      "Wie stelle ich verlorene Zugangsdaten wieder her?",
-      "Wo werden meine Zugangsdaten aufbewahrt?",
-      "Zugangsdaten"
-    ],
-    "Datensicherungen": [
-      "Wie führe ich Datensicherungen durch?",
-      "Wo werden meine Datensicherungen aufbewahrt?",
-      "Wie stelle ich Daten aus meinen Datensicherungen wieder her?",
-      "Was ist der Zeitplan für meine Datensicherungen?",
-      "Datensicherung"
-    ],
-    "Internetanbieter-Verträge": [
-      "Was sind die Bedingungen meiner Internetanbieter-Verträge?",
-      "Wie ändere ich meine Internetanbieter-Verträge?",
-      "Welche Dienstleistungen sind in meinen Internetanbieter-Verträgen enthalten?",
-      "Wie kündige ich meine Internetanbieter-Verträge?",
-      "Internetanbieter-Vertrag"
-    ],
-    "Gerätehandbücher": [
-      "Wo finde ich meine Gerätehandbücher?",
-      "Wie benutze ich meine Gerätehandbücher?",
-      "Welche Informationen sind in meinen Gerätehandbüchern enthalten?",
-      "Wie lade ich meine Gerätehandbücher herunter?",
-      "Gerätehandbuch"
-    ]
-  },
-  "Karate Union": {
-    "Mitgliedschaften": [
-      "Bin ich Mitglied der Karate Union?",
-      "Wie erneuere ich meine Mitgliedschaften?",
-      "Was sind die Vorteile meiner Mitgliedschaften?",
-      "Wie kündige ich meine Mitgliedschaften?",
-      "Mitgliedschaft"
-    ],
-    "Graduierungsunterlagen": [
-      "Was ist mein aktueller Graduierungsunterlagen?",
-      "Wie aktualisiere ich meine Graduierungsunterlagen?",
-      "Was wird für meine nächste Graduierungsunterlagen benötigt?",
-      "Wie überprüfe ich meine Graduierungsunterlagen?",
-      "Graduierungsunterlage"
-    ],
-    "Veranstaltungsunterlagen": [
-      "Wann ist das nächste Veranstaltungsunterlagen?",
-      "Wie melde ich mich für Veranstaltungsunterlagen an?",
-      "Welche Veranstaltungen sind durch meine Veranstaltungsunterlagen abgedeckt?",
-      "Wie greife ich auf vergangene Veranstaltungsunterlagen zu?",
-      "Veranstaltungsunterlage"
-    ],
-    "Protokolle": [
-      "Wo sind die Protokolle?",
-      "Wie greife ich auf meine Protokolle zu?",
-      "Welche Sitzungen sind in meinen Protokollen enthalten?",
-      "Wie trage ich zu den Protokollen bei?",
-      "Protokoll"
-    ],
-    "Haftungsausschlüsse": [
-      "Habe ich Haftungsausschlüsse?",
-      "Wie erhalte ich meine Haftungsausschlüsse?",
-      "Welche Aktivitäten sind durch meine Haftungsausschlüsse abgedeckt?",
-      "Wie aktualisiere ich meine Haftungsausschlüsse?",
-      "Haftungsausschluss"
-    ]
-  }
+  "Software Development": [
+    "What are the best programming languages to learn for software development?",
+    "How do I become a software developer?",
+    "What is the software development lifecycle?",
+    "What tools are commonly used in software development?",
+    "What are the differences between front-end and back-end development?",
+    "How do I debug my software application?",
+    "What is an agile development methodology?",
+    "What are some popular frameworks for software development?"
+  ],
+  "Microservices": [
+    "What are microservices and how do they work?",
+    "How do I transition from monolithic to microservices architecture?",
+    "What are the advantages of using microservices?",
+    "What technologies are best for building microservices?",
+    "How do I manage communication between microservices?",
+    "What are some challenges with microservices architecture?",
+    "How can I secure my microservices?",
+    "What are the best practices for deploying microservices?"
+  ],
+  "Java": [
+    "What is Java and why is it so popular?",
+    "How do I install Java on my computer?",
+    "What are the main features of the Java programming language?",
+    "How do I write a simple Java program?",
+    "What is the difference between JDK, JRE, and JVM?",
+    "What are Java collections and how do they work?",
+    "How do I handle exceptions in Java?",
+    "What are the best libraries and frameworks for Java development?"
+  ],
+  "Reactive Systems": [
+    "What is a reactive system?",
+    "What are the principles of reactive programming?",
+    "How do I build a reactive application?",
+    "What frameworks support reactive programming?",
+    "What are the challenges of developing reactive systems?",
+    "How do reactive systems handle scalability?",
+    "What is the difference between reactive and imperative programming?",
+    "What are some use cases for reactive systems?"
+  ]
 }
