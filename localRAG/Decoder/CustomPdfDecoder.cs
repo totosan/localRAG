@@ -1,80 +1,227 @@
-using iText.Layout.Element;
-using localRAG.Plugins;
+using System.Collections.Generic;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using Microsoft.IdentityModel.Tokens;
 using Microsoft.KernelMemory.DataFormats;
 using Microsoft.KernelMemory.Diagnostics;
-using Microsoft.KernelMemory.Pipeline;
-using UglyToad.PdfPig;
-using UglyToad.PdfPig.Content;
-using UglyToad.PdfPig.DocumentLayoutAnalysis.TextExtractor;
-using SixLabors.ImageSharp;
-
+using localRAG;
 
 public class CustomPdfDecoder : IContentDecoder
 {
     private readonly ILogger<CustomPdfDecoder> _log;
+    private readonly HttpClient _httpClient;
+    private readonly Uri _doclingEndpoint;
+    private readonly string? _apiKey;
+    private const string PdfMimeType = "application/pdf";
+    private const string PlainTextMimeType = "text/plain";
 
-    public CustomPdfDecoder(ILoggerFactory? loggerFactory = null)
+    public CustomPdfDecoder(ILoggerFactory? loggerFactory = null, IHttpClientFactory? httpClientFactory = null)
     {
         this._log = (loggerFactory ?? DefaultLogger.Factory).CreateLogger<CustomPdfDecoder>();
+        this._httpClient = httpClientFactory?.CreateClient(nameof(CustomPdfDecoder)) ?? new HttpClient();
+
+        var baseUrl = Helpers.EnvVarOrDefault("DOCLING_ENDPOINT", "http://localhost:5001");
+        if (!baseUrl.EndsWith('/'))
+        {
+            baseUrl += "/";
+        }
+
+        this._doclingEndpoint = new Uri(new Uri(baseUrl), "v1/convert/file");
+        this._apiKey = Environment.GetEnvironmentVariable("DOCLING_API_KEY");
     }
 
     /// <inheritdoc />
     public bool SupportsMimeType(string mimeType)
     {
-        return mimeType != null && mimeType.StartsWith(MimeTypes.Pdf, StringComparison.OrdinalIgnoreCase);
+        return mimeType != null && mimeType.StartsWith(PdfMimeType, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <inheritdoc />
-    public Task<FileContent> DecodeAsync(string filename, CancellationToken cancellationToken = default)
+    public async Task<FileContent> DecodeAsync(string filename, CancellationToken cancellationToken = default)
     {
-        using var stream = File.OpenRead(filename);
-        return this.DecodeAsync(stream, cancellationToken);
+        await using var stream = File.OpenRead(filename);
+        return await this.DecodeInternalAsync(stream, Path.GetFileName(filename), cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
-    public Task<FileContent> DecodeAsync(BinaryData data, CancellationToken cancellationToken = default)
+    public async Task<FileContent> DecodeAsync(BinaryData data, CancellationToken cancellationToken = default)
     {
-        using var stream = data.ToStream();
-        return this.DecodeAsync(stream, cancellationToken);
+        await using var stream = data.ToStream();
+        return await this.DecodeInternalAsync(stream, null, cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
     public Task<FileContent> DecodeAsync(Stream data, CancellationToken cancellationToken = default)
     {
-        this._log.LogDebug("Extracting text from PDF file");
+        return this.DecodeInternalAsync(data, null, cancellationToken);
+    }
 
-        var result = new FileContent(MimeTypes.PlainText);
+    private async Task<FileContent> DecodeInternalAsync(Stream data, string? fileName, CancellationToken cancellationToken)
+    {
+        var result = new FileContent(PlainTextMimeType);
+        var payloadStream = new MemoryStream();
+        await data.CopyToAsync(payloadStream, cancellationToken).ConfigureAwait(false);
 
-        using PdfDocument? pdfDocument = PdfDocument.Open(data);
-        if (pdfDocument == null) { return Task.FromResult(result); }
+        using var request = new HttpRequestMessage(HttpMethod.Post, this._doclingEndpoint);
+        using var formContent = this.CreateMultipartContent(payloadStream, fileName);
+        request.Content = formContent;
 
-        var options = new ContentOrderTextExtractor.Options
+        if (!string.IsNullOrWhiteSpace(this._apiKey))
         {
-            ReplaceWhitespaceWithSpace = true,
-            SeparateParagraphsWithDoubleNewline = false,
-        };
-
-        foreach (Page? page in pdfDocument.GetPages().Where(x => x != null))
-        {
-            string pageContent = (ContentOrderTextExtractor.GetText(page, options) ?? string.Empty).ReplaceLineEndings(" ");
-            if (pageContent.IsNullOrEmpty())
-            {
-                var image = page.GetImages().FirstOrDefault();
-                if (image != null)
-                {
-                    // convert the image to an inmemory PNG
-                    byte[] imageBytes = image.RawBytes.ToArray();
-                    byte[] imageBytesPng;
-                    image.TryGetPng(out imageBytesPng);
-                    //var png = SixLabors.ImageSharp.Image.Load(new MemoryStream(imageBytes));
-                    pageContent = PdfExtractorizer.ExtractTextFromImage(imageBytesPng == null ? imageBytes: imageBytesPng);
-                }
-            }
-            result.Sections.Add(new FileSection(page.Number, pageContent, false));
+            request.Headers.TryAddWithoutValidation("X-Api-Key", this._apiKey);
         }
 
-        return Task.FromResult(result);
+        this._log.LogDebug("Sending PDF to Docling service at {Endpoint}", this._doclingEndpoint);
+
+        try
+        {
+            using var response = await this._httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorPayload = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                this._log.LogError("Docling conversion failed: {StatusCode} - {Error}", response.StatusCode, errorPayload);
+                return result;
+            }
+
+            await using var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+            using var jsonDoc = await JsonDocument.ParseAsync(responseStream, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            if (!jsonDoc.RootElement.TryGetProperty("document", out var documentElement))
+            {
+                this._log.LogWarning("Docling response missing document payload");
+                return result;
+            }
+
+            if (this.TryAddJsonSections(documentElement, result))
+            {
+                return result;
+            }
+
+            if (this.TryAddPlainText(documentElement, result))
+            {
+                return result;
+            }
+
+            this._log.LogWarning("Docling response did not include usable text content");
+            return result;
+        }
+        catch (Exception ex) when (ex is HttpRequestException || ex is TaskCanceledException || ex is JsonException)
+        {
+            this._log.LogError(ex, "Docling conversion failed");
+            return result;
+        }
+    }
+
+    private MultipartFormDataContent CreateMultipartContent(MemoryStream payloadStream, string? fileName)
+    {
+        payloadStream.Position = 0;
+        var form = new MultipartFormDataContent();
+        var streamContent = new StreamContent(payloadStream);
+        streamContent.Headers.ContentType = MediaTypeHeaderValue.Parse(PdfMimeType);
+        form.Add(streamContent, "files", string.IsNullOrWhiteSpace(fileName) ? "document.pdf" : fileName);
+
+        form.Add(new StringContent("pdf"), "from_formats");
+        form.Add(new StringContent("json"), "to_formats");
+        form.Add(new StringContent("text"), "to_formats");
+        form.Add(new StringContent("true"), "do_ocr");
+        form.Add(new StringContent("false"), "force_ocr");
+
+        return form;
+    }
+
+    private bool TryAddJsonSections(JsonElement documentElement, FileContent result)
+    {
+        if (!documentElement.TryGetProperty("json_content", out var jsonContent) || jsonContent.ValueKind != JsonValueKind.Object)
+        {
+            return false;
+        }
+
+        if (!jsonContent.TryGetProperty("texts", out var textsElement) || textsElement.ValueKind != JsonValueKind.Array)
+        {
+            return false;
+        }
+
+        var sectionsFound = false;
+        var pages = new SortedDictionary<int, StringBuilder>();
+
+        foreach (var textNode in textsElement.EnumerateArray())
+        {
+            if (!textNode.TryGetProperty("text", out var textValue) || textValue.ValueKind != JsonValueKind.String)
+            {
+                continue;
+            }
+
+            var text = textValue.GetString();
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                continue;
+            }
+
+            var pageNumber = this.ResolvePageNumber(textNode);
+            if (!pages.TryGetValue(pageNumber, out var builder))
+            {
+                builder = new StringBuilder();
+                pages[pageNumber] = builder;
+            }
+
+            if (builder.Length > 0)
+            {
+                builder.AppendLine();
+            }
+
+            builder.Append(text.Trim());
+        }
+
+        foreach (var kvp in pages)
+        {
+            var content = kvp.Value.ToString();
+            if (string.IsNullOrWhiteSpace(content))
+            {
+                continue;
+            }
+
+            var meta = Chunk.Meta(true, kvp.Key);
+            var chunk = new Chunk(content, kvp.Key, meta);
+            result.Sections.Add(chunk);
+            sectionsFound = true;
+        }
+
+        return sectionsFound;
+    }
+
+    private bool TryAddPlainText(JsonElement documentElement, FileContent result)
+    {
+        if (!documentElement.TryGetProperty("text_content", out var textElement) || textElement.ValueKind != JsonValueKind.String)
+        {
+            return false;
+        }
+
+        var text = textElement.GetString();
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        var meta = Chunk.Meta(true, 1);
+        var chunk = new Chunk(text.Trim(), 1, meta);
+        result.Sections.Add(chunk);
+        return true;
+    }
+
+    private int ResolvePageNumber(JsonElement textNode)
+    {
+        if (textNode.TryGetProperty("prov", out var provArray) && provArray.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var prov in provArray.EnumerateArray())
+            {
+                if (prov.TryGetProperty("page_no", out var pageNoElement) && pageNoElement.TryGetInt32(out var pageNo) && pageNo > 0)
+                {
+                    return pageNo;
+                }
+            }
+        }
+
+        return 1;
     }
 }

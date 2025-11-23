@@ -1,0 +1,41 @@
+# Invalid LLM Response Fixture
+
+This file demonstrates the malformed output from DeepSeek-R1 and similar reasoning models
+that prefix JSON responses with <think>...</think> blocks.
+
+## Before Sanitization (Raw Plugin Output)
+
+```
+<think>
+Alright, so I need to figure out how to reconstruct the process of writing two questions for an RAG system based on the user's input. The user provided an example and some notes, which helped me understand that I need to create a standalone query and one or more follow-up questions.
+
+First, I should analyze the user's input to identify the core intent.
+Then, I will formulate a standalone question that captures this intent clearly.
+Next, I will generate follow-up questions that explore related aspects or details.
+Finally, I will format the output as a JSON list with "StandaloneQuestion" and "Score" fields.
+</think>
+[
+  {"StandaloneQuestion": "What is unsupervised learning?", "Score": 10},
+  {"StandaloneQuestion": "Explain the key concepts of unsupervised machine learning.", "Score": 9}
+]
+```
+
+## After Sanitization (Expected JSON)
+
+```json
+[
+  {"StandaloneQuestion": "What is unsupervised learning?", "Score": 10},
+  {"StandaloneQuestion": "Explain the key concepts of unsupervised machine learning.", "Score": 9}
+]
+```
+
+## Sanitization Logic
+
+The `SanitizePluginOutput` method now:
+1. Strips markdown code fences (```json, ```)
+2. Removes <think>...</think> reasoning blocks
+3. Trims whitespace to expose valid JSON
+
+This ensures IntentsPlugin and RewriteUserAskPlugin outputs parse correctly even when
+the model emits reasoning text before the expected JSON payload.
+

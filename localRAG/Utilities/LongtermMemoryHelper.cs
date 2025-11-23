@@ -1,4 +1,8 @@
+using System.Diagnostics;
+using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -9,11 +13,21 @@ using Microsoft.KernelMemory;
 using Microsoft.KernelMemory.Context;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
+using Spectre.Console;
 
 namespace localRAG.Utilities
 {
     public class LongtermMemoryHelper
     {
+        private static readonly IReadOnlyList<string> PipelineStepOrder = new[]
+        {
+            Constants.PipelineStepsExtract,
+            "generate_tags",
+            Constants.PipelineStepsPartition,
+            Constants.PipelineStepsGenEmbeddings,
+            Constants.PipelineStepsSaveRecords,
+        };
+
         /// <summary>
         /// Loads and stores PDF, DOCX, PPTX, and image files from the specified directory into memory, extracting tags for each document.
         /// </summary>
@@ -22,46 +36,184 @@ namespace localRAG.Utilities
         /// <returns>A TagCollection containing tags from the last processed file.</returns>
         public static async Task<TagCollection> LoadAndStorePdfFromPathAsync(IKernelMemory memoryConnector, string path)
         {
-            // read all pdf, docx, images and pptx n a directory
             var files = Directory.GetFiles(path, "*.*", SearchOption.AllDirectories)
-                .Where(file => file.EndsWith(".pdf") || file.EndsWith(".docx") || file.EndsWith(".pptx") || file.EndsWith(".jpg") || file.EndsWith(".jpeg") || file.EndsWith(".png"))
+                .Where(file => file.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase)
+                               || file.EndsWith(".docx", StringComparison.OrdinalIgnoreCase)
+                               || file.EndsWith(".pptx", StringComparison.OrdinalIgnoreCase)
+                               || file.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase)
+                               || file.EndsWith(".jpeg", StringComparison.OrdinalIgnoreCase)
+                               || file.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
                 .ToList();
+
             var context = new RequestContext();
             var tags = new TagCollection();
 
-            foreach (var file in files)
-            {
-                var fileId = Helpers.HashThis(file);
-                var saved = await memoryConnector.IsDocumentReadyAsync(fileId);
-                if (!saved)
-                {
-                    try
-                    {
-                        var docid = await memoryConnector.ImportDocumentAsync(new Document(fileId)
-                                                                        .AddFile(file),
-                                                                        steps: [
-                                                                            Constants.PipelineStepsExtract,
-                                                                            "generate_tags",
-                                                                            Constants.PipelineStepsPartition,
-                                                                            Constants.PipelineStepsGenEmbeddings,
-                                                                            Constants.PipelineStepsSaveRecords,
-                                                                            //"manage_tags"
-                                                                        ],
-                                                                    context: context);
-                        Console.WriteLine($"\nDocument {file} is being processed\n");
-                    }
-                    catch (System.Exception e)
-                    {
-                        Console.WriteLine($"Error processing file {file}");
-                        throw;
-                    }
+            TraceLogger.Log($"LoadAndStorePdfFromPathAsync invoked for '{path}' with {files.Count} candidate files.");
 
+            if (files.Count == 0)
+            {
+                TraceLogger.Log($"No supported documents found under '{path}'.", echoToConsole: true, consoleMarkup: $"[yellow]No supported documents found in[/] [underline]{Markup.Escape(path)}[/].");
+                AnsiConsole.MarkupLine($"[yellow]No supported documents found in[/] [underline]{path}[/].");
+                return tags;
+            }
+
+            var stepsPerDocument = PipelineStepOrder.Count;
+
+            TraceLogger.Log($"Beginning import for {files.Count} documents (steps/doc: {stepsPerDocument}).");
+
+            await AnsiConsole.Progress()
+                .AutoClear(false)
+                .Columns(
+                    new TaskDescriptionColumn(),
+                    new ProgressBarColumn(),
+                    new PercentageColumn(),
+                    new RemainingTimeColumn(),
+                    new SpinnerColumn())
+                .StartAsync(async progressCtx =>
+                {
+                    var importTask = progressCtx.AddTask("[green]Importing documents[/]", maxValue: files.Count * stepsPerDocument);
+                    var processedDocuments = 0;
+
+                    foreach (var file in files)
+                    {
+                        var baseStepValue = processedDocuments * stepsPerDocument;
+                        var fileId = Helpers.HashThis(file);
+                        var fileName = Path.GetFileName(file);
+                        var saved = await memoryConnector.IsDocumentReadyAsync(fileId);
+
+                        TraceLogger.Log($"[{fileName}] Starting processing (fileId={fileId}, saved={saved}).");
+
+                        importTask.Description = saved
+                            ? $"[grey]Up-to-date[/] {fileName}"
+                            : $"[cyan]Importing[/] {fileName}";
+
+                        TaskCompletionSource<bool>? monitorCompletion = null;
+                        Task monitorTask = Task.CompletedTask;
+
+                        if (!saved)
+                        {
+                            monitorCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                            monitorTask = MonitorPipelineStepsAsync(
+                                memoryConnector,
+                                fileId,
+                                fileName,
+                                importTask,
+                                baseStepValue,
+                                monitorCompletion.Task);
+
+                            var importStopwatch = Stopwatch.StartNew();
+                            try
+                            {
+                                TraceLogger.Log($"[{fileName}] ImportDocumentAsync queued.");
+                                await memoryConnector.ImportDocumentAsync(new Document(fileId)
+                                        .AddFile(file),
+                                        steps: PipelineStepOrder.ToArray(),
+                                        context: context);
+                                importStopwatch.Stop();
+                                TraceLogger.Log($"[{fileName}] ImportDocumentAsync finished in {importStopwatch.Elapsed}." , echoToConsole: false);
+                                AnsiConsole.MarkupLine($"[green]queued[/] {file}");
+                            }
+                            catch (Exception ex)
+                            {
+                                importStopwatch.Stop();
+                                TraceLogger.Log($"[{fileName}] ImportDocumentAsync failed after {importStopwatch.Elapsed}: {ex.Message}", echoToConsole: true, consoleMarkup: $"[red]Error processing[/] {Markup.Escape(file)}: {Markup.Escape(ex.Message)}");
+                                AnsiConsole.MarkupLine($"[red]Error processing[/] {Markup.Escape(file)}: {Markup.Escape(ex.Message)}");
+                                throw;
+                            }
+                            finally
+                            {
+                                monitorCompletion.TrySetResult(true);
+                                await monitorTask;
+                            }
+                        }
+                        else
+                        {
+                            importTask.Value = baseStepValue + stepsPerDocument;
+                        }
+
+                        importTask.Value = baseStepValue + stepsPerDocument;
+                        importTask.Description = saved
+                            ? $"[grey]Up-to-date[/] {fileName}"
+                            : $"[green]Completed[/] {fileName}";
+                        processedDocuments++;
+
+                        tags = await GetTagsFromDocumentById(memoryConnector, file, fileId);
+
+                        var fileDisplay = Markup.Escape(file ?? "unknown");
+                        var tagDisplay = tags.Count == 0
+                            ? "[grey]none[/]"
+                            : string.Join(", ", tags.Select(kvp =>
+                                $"{Markup.Escape(kvp.Key)}: {Markup.Escape(string.Join("/", kvp.Value ?? []))}"));
+
+                        AnsiConsole.MarkupLine($"[dim]Tags for[/] {fileDisplay}: {tagDisplay}");
+                        TraceLogger.Log($"[{fileName}] Tags => {tagDisplay.Replace("[grey]none[/]", "none")}");
+                    }
+                });
+
+            return tags;
+        }
+
+        private static async Task MonitorPipelineStepsAsync(
+            IKernelMemory memoryConnector,
+            string fileId,
+            string fileName,
+            ProgressTask progressTask,
+            double baseValue,
+            Task completionSignal)
+        {
+            var stepsPerDoc = PipelineStepOrder.Count;
+            var monitorWatch = Stopwatch.StartNew();
+            string? lastStep = null;
+            int lastCompleted = -1;
+            int lastRemaining = stepsPerDoc;
+
+            while (true)
+            {
+                if (completionSignal.IsCompleted)
+                {
+                    break;
                 }
 
-                tags = await GetTagsFromDocumentById(memoryConnector, file, fileId);
-                Console.WriteLine($"File: {file}\n\t- Tags: {tags}");
+                int completedSteps = 0;
+                int remainingSteps = stepsPerDoc;
+
+                try
+                {
+                    var status = await memoryConnector.GetDocumentStatusAsync(fileId);
+                    completedSteps = status?.CompletedSteps?.Count ?? 0;
+                    remainingSteps = status?.RemainingSteps?.Count ?? Math.Max(stepsPerDoc - completedSteps, 0);
+                }
+                catch
+                {
+                    // Status may not be available immediately while the pipeline warms up.
+                }
+
+                var stepIndex = Math.Clamp(completedSteps, 0, Math.Max(stepsPerDoc - 1, 0));
+                var currentStep = completedSteps >= stepsPerDoc && remainingSteps == 0
+                    ? "finalizing"
+                    : PipelineStepOrder[stepIndex];
+
+                progressTask.Description = $"[cyan]{currentStep}[/] {fileName}";
+                var newValue = baseValue + Math.Min(completedSteps, stepsPerDoc);
+                progressTask.Value = Math.Min(newValue, progressTask.MaxValue);
+
+                if (currentStep != lastStep || completedSteps != lastCompleted)
+                {
+                    TraceLogger.Log($"[{fileName}] step={currentStep} completed={completedSteps} remaining={remainingSteps} elapsed={monitorWatch.Elapsed}");
+                    lastStep = currentStep;
+                    lastCompleted = completedSteps;
+                    lastRemaining = remainingSteps;
+                }
+
+                if (completedSteps >= stepsPerDoc && remainingSteps == 0)
+                {
+                    break;
+                }
+
+                await Task.Delay(TimeSpan.FromSeconds(1));
             }
-            return tags;
+
+            TraceLogger.Log($"[{fileName}] pipeline monitor finished (completed={lastCompleted}, remaining={lastRemaining}) after {monitorWatch.Elapsed}.");
         }
 
 
@@ -76,7 +228,7 @@ namespace localRAG.Utilities
         {
             TagCollection tags = new TagCollection();
             var pipeline = await memoryConnector.GetDocumentStatusAsync(fileId);
-            Console.WriteLine($"Document {file} is being processed");
+            // Console.WriteLine($"Document {file} is being processed");
             //write all tags from pipleline
             foreach (var tag in pipeline.Tags)
             {

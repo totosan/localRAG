@@ -18,6 +18,7 @@ using Microsoft.KernelMemory.Diagnostics;
 using Microsoft.KernelMemory.Extensions;
 using Microsoft.KernelMemory.Pipeline;
 using Microsoft.KernelMemory.Prompts;
+using Microsoft.SemanticKernel.Text;
 
 namespace Microsoft.KernelMemory.Handlers;
 
@@ -116,7 +117,7 @@ public sealed class GenerateTagsHandler : IPipelineStepHandler
         foreach (DataPipeline.FileDetails uploadedFile in pipeline.Files)
         {
             // Track new files being generated (cannot edit originalFile.GeneratedFiles while looping it)
-            Dictionary<string, DataPipeline.GeneratedFileDetails> tocFiles = [];
+            var tocFiles = new Dictionary<string, DataPipeline.GeneratedFileDetails>();
             importedFiles.Add(new ImportedFile
             {
                 Filename = uploadedFile.Name,
@@ -311,10 +312,10 @@ public sealed class GenerateTagsHandler : IPipelineStepHandler
             }
             else
             {
-#pragma warning disable KMEXP00 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable SKEXP0050
                 List<string> lines = TextChunker.SplitPlainTextLines(content, maxTokensPerLine: maxTokensPerLine);
                 paragraphs = TextChunker.SplitPlainTextParagraphs(lines, maxTokensPerParagraph: maxTokensPerParagraph, overlapTokens: overlappingTokens);
-#pragma warning restore KMEXP00 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning restore SKEXP0050
             }
 
             this._log.LogTrace("Paragraphs to summarize: {0}", paragraphs.Count);
@@ -326,7 +327,7 @@ public sealed class GenerateTagsHandler : IPipelineStepHandler
 
                 var tagtext = TransformTagsToString();
                 var filledPrompt = summarizationPrompt.Replace("{{$tags}}", tagtext).Replace("{{$input}}", paragraph, StringComparison.OrdinalIgnoreCase);
-                await foreach (string token in textGenerator.GenerateTextAsync(filledPrompt, new TextGenerationOptions()).ConfigureAwait(false))
+                await foreach (var token in textGenerator.GenerateTextAsync(filledPrompt, new TextGenerationOptions()).ConfigureAwait(false))
                 {
                     newContent.Append(token);
                 }

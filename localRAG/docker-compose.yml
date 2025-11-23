@@ -1,20 +1,18 @@
 version: "3.8"
 services:
-  mongodb-atlas-local:
-    image: mongodb/mongodb-atlas-local:latest
-    container_name: mongodb-atlas-local
-    command: ["/usr/local/bin/runner", "server"]
+  mongodb:
+    image: mongo:7.0
+    container_name: mongodb-local
     ports:
       - "27018:27017"
     environment:
-      MONGODB_DATABASE_NAME: localRAG
-      MONGODB_INITDB_ROOT_USERNAME: admin
-      MONGODB_INITDB_ROOT_PASSWORD: ${MONGODB_INITDB_ROOT_PASSWORD}
-      MONGODB_CONNECTION_STRING: mongodb://admin:${MONGODB_INITDB_ROOT_PASSWORD}@localhost:27018/?directConnection=true
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_INITDB_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE: localRAG
     volumes:
-      - mongodb-atlas_mongodb-data:/data/db
-      - mongodb-atlas_mongodb-config:/data/configdb
+      - mongodb_data:/data/db
+      - mongodb_config:/data/configdb
 
 volumes:
-  mongodb-atlas_mongodb-data:
-  mongodb-atlas_mongodb-config:
+  mongodb_data:
+  mongodb_config:

@@ -11,17 +11,17 @@
   <ItemGroup>
     <PackageReference Include="DotNetEnv" Version="3.1.1" />
     <PackageReference Include="itext7" Version="9.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.0" />
-    <PackageReference Include="Microsoft.KernelMemory" Version="0.94.241201.1" />
-    <PackageReference Include="Microsoft.SemanticKernel" Version="1.31.0" />
-    <PackageReference Include="Microsoft.SemanticKernel.Connectors.OpenAI" Version="1.31.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.4" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.4" />
+    <PackageReference Include="Microsoft.KernelMemory" Version="0.98.250508.3" />
+    <PackageReference Include="Microsoft.SemanticKernel" Version="1.67.1" />
+    <PackageReference Include="Microsoft.SemanticKernel.Connectors.OpenAI" Version="1.67.1" />
     <PackageReference Include="Microsoft.SemanticKernel.Process.Abstractions" Version="1.32.0-alpha" />
     <PackageReference Include="Microsoft.SemanticKernel.Process.Core" Version="1.32.0-alpha" />
     <PackageReference Include="Microsoft.SemanticKernel.Process.LocalRuntime" Version="1.32.0-alpha" />
     <PackageReference Include="PuppeteerSharp" Version="20.0.5" />
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.6" />
-    <PackageReference Include="Spectre.Console" Version="0.50.0" />
+    <!-- Spectre.Console is defined centrally in Directory.Packages.props (0.47.0). Removed duplicate here. -->
     <PackageReference Include="Tesseract" Version="5.2.0" />
   </ItemGroup>
   <Target Name="link_deps" AfterTargets="AfterBuild">

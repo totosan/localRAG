@@ -59,6 +59,13 @@ namespace localRAG
         {
             PrintFancyTitle();
             IEnumerable<KeyValuePair<string, string>> ENV = DotNetEnv.Env.Load(".env");
+
+            if (args.Contains("--ollama") || args.Contains("--local"))
+            {
+                Environment.SetEnvironmentVariable("USE_OLLAMA", "true");
+                AnsiConsole.MarkupLine("[bold yellow]Running in Local/Ollama mode (forced by switch)[/]");
+            }
+
             IMPORT_PATH = Helpers.EnvVar("IMPORT_PATH") ?? throw new Exception("IMPORT_PATH not found in .env file");
 
             // Check if there are documents to process
@@ -68,13 +75,23 @@ namespace localRAG
                 return;
             }
 
+            bool runImport = args.Contains("--import") || args.Contains("--index");
+
             // Check if tags.json exists, if not, generate it
             string tagsPath = Path.Combine(Directory.GetCurrentDirectory(), "tags.json");
-            if (!File.Exists(tagsPath))
+            if (!File.Exists(tagsPath) || runImport)
             {
-                AssistantAnswer("tags.json not found. Generating tags.json...");
+                if (runImport)
+                {
+                    AssistantAnswer("Import requested. Updating tags and documents...");
+                }
+                else
+                {
+                    AssistantAnswer("tags.json not found. Generating tags.json...");
+                }
+                
                 await GenerateTagsJsonAsync(tagsPath);
-                AssistantAnswer("tags.json created.");
+                AssistantAnswer("tags.json created/updated.");
             }
 
             // ==================================
@@ -113,7 +130,8 @@ namespace localRAG
             // ==================================
 
             // Load the Kernel Memory plugin into Semantic Kernel.
-            var memoryConnector = Helpers.GetMemoryConnector<MemoryServerless>(serverless: true, useAzure: true, debug: DEBUG_MEMORY);
+            bool useOllama = Environment.GetEnvironmentVariable("USE_OLLAMA")?.ToLower() == "true";
+            var memoryConnector = Helpers.GetMemoryConnector<MemoryServerless>(serverless: true, useAzure: !useOllama, debug: DEBUG_MEMORY);
 
             // Read existing tags for handler initialization
             Dictionary<string, Dictionary<string, List<string>>> mainTags = new();
@@ -167,7 +185,10 @@ namespace localRAG
             // === LOAD DOCUMENTS INTO MEMORY ===
             // ==================================
 
-            await ImportDocumentsAsync(kernel35, memoryConnector, promptPlugins);
+            if (runImport)
+            {
+                await ImportDocumentsAsync(kernel35, memoryConnector, promptPlugins);
+            }
             //await CreateIntentionsAsync(memoryConnector);
 
             // ==================================
@@ -262,17 +283,54 @@ namespace localRAG
                 }
 
                 var result = await kernel.InvokeAsync<string>(prompts["IntentsPlugin"], new() { ["input"] = JsonSerializer.Serialize(listOfTags) });
-                if (result != null)
+                if (!string.IsNullOrWhiteSpace(result))
                 {
-                    var intentListWithQuestions = result.Replace("```json\n", "").Replace("```", "").Trim();
-                    var tagCollection = JsonSerializer.Deserialize<Dictionary<string, List<string?>>>(intentListWithQuestions);
-
-                    if (tagCollection != null)
+                    var intentListWithQuestions = SanitizePluginOutput(result);
+                    try
                     {
-                        Console.WriteLine($"Generated {tagCollection.Count} tag collections with questions");
+                        var tagCollection = JsonSerializer.Deserialize<Dictionary<string, List<string?>>>(intentListWithQuestions);
+                        if (tagCollection != null)
+                        {
+                            Console.WriteLine($"Generated {tagCollection.Count} tag collections with questions");
+                        }
+                    }
+                    catch (JsonException ex)
+                    {
+                        var preview = intentListWithQuestions.Length > 200
+                            ? intentListWithQuestions[..200] + "..."
+                            : intentListWithQuestions;
+                        TraceLogger.Log($"[ImportDocumentsAsync] Ignoring non-JSON IntentsPlugin output: {preview}");
+                        Console.WriteLine($"Warning: IntentsPlugin returned invalid JSON ({ex.Message}). Skipping intent question generation.");
                     }
                 }
             }
+        }
+
+        private static string SanitizePluginOutput(string? payload)
+        {
+            if (string.IsNullOrWhiteSpace(payload))
+            {
+                return string.Empty;
+            }
+
+            var cleaned = payload
+                .Replace("```json\n", string.Empty, StringComparison.OrdinalIgnoreCase)
+                .Replace("```json", string.Empty, StringComparison.OrdinalIgnoreCase)
+                .Replace("```", string.Empty, StringComparison.OrdinalIgnoreCase)
+                .Trim();
+
+            // Strip <think>...</think> reasoning blocks
+            var thinkStartIndex = cleaned.IndexOf("<think>", StringComparison.OrdinalIgnoreCase);
+            if (thinkStartIndex >= 0)
+            {
+                var thinkEndIndex = cleaned.IndexOf("</think>", thinkStartIndex, StringComparison.OrdinalIgnoreCase);
+                if (thinkEndIndex >= 0)
+                {
+                    cleaned = cleaned.Remove(thinkStartIndex, thinkEndIndex - thinkStartIndex + "</think>".Length).Trim();
+                }
+            }
+
+            return cleaned;
         }
 
         private static async Task CreateIntentionsAsync(IKernelMemory kernelMemory)
@@ -295,7 +353,8 @@ namespace localRAG
                 return;
             }
 
-            var memoryConnector = Helpers.GetMemoryConnector<MemoryServerless>(serverless: true, useAzure: true, debug: DEBUG_MEMORY);
+            bool useOllama = Environment.GetEnvironmentVariable("USE_OLLAMA")?.ToLower() == "true";
+            var memoryConnector = Helpers.GetMemoryConnector<MemoryServerless>(serverless: true, useAzure: !useOllama, debug: DEBUG_MEMORY);
 
             // Read or initialize tags dictionary
             var existingTags = new Dictionary<string, HashSet<string>>();
@@ -385,13 +444,26 @@ namespace localRAG
                     );
 
                     // Clean and parse generated tag questions, with null checks
-                    var intentListWithQuestions = result?
-                        .Replace("```json\n", "")
-                        .Replace("```", "")
-                        .Trim() ?? string.Empty;
+                    var intentListWithQuestions = SanitizePluginOutput(result);
 
-                    var generatedTagCollection = JsonSerializer.Deserialize<Dictionary<string, List<string>>>(intentListWithQuestions)
-                        ?? new Dictionary<string, List<string>>();
+                    Dictionary<string, List<string>> generatedTagCollection = new();
+                    if (!string.IsNullOrWhiteSpace(intentListWithQuestions))
+                    {
+                        try
+                        {
+                            generatedTagCollection = JsonSerializer.Deserialize<Dictionary<string, List<string>>>(intentListWithQuestions)
+                                ?? new Dictionary<string, List<string>>();
+                        }
+                        catch (JsonException ex)
+                        {
+                            var preview = intentListWithQuestions.Length > 200
+                                ? intentListWithQuestions[..200] + "..."
+                                : intentListWithQuestions;
+                            TraceLogger.Log($"[IntentsPlugin] Non-JSON output ignored: {preview}");
+                            AnsiConsole.MarkupLine("[yellow]Warning:[/] IntentsPlugin returned non-JSON content; skipping tag question generation for this run.");
+                            AnsiConsole.MarkupLine($"[dim]Parser error:[/] {ex.Message}");
+                        }
+                    }
 
                     // Merge and deduplicate tags
                     var mergedTags = new Dictionary<string, HashSet<string>>(existingTags);

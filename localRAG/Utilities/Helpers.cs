@@ -48,7 +48,28 @@ namespace localRAG
         {
             Kernel kernel;
             IKernelBuilder builder;
-            if (!weakGpt)
+            bool useOllama = Environment.GetEnvironmentVariable("USE_OLLAMA")?.ToLower() == "true";
+
+            if (useOllama)
+            {
+                Console.WriteLine($"used model (Ollama): {Environment.GetEnvironmentVariable("OLLAMA_TEXT")}");
+                string endpoint = Environment.GetEnvironmentVariable("OLLAMA_ENDPOINT")!;
+                // Ensure endpoint ends with /v1 for OpenAI compatibility
+                if (!endpoint.EndsWith("/v1"))
+                {
+                    endpoint = endpoint.TrimEnd('/') + "/v1";
+                }
+
+#pragma warning disable SKEXP0010
+                builder = Kernel.CreateBuilder()
+                    .AddOpenAIChatCompletion(
+                        modelId: Environment.GetEnvironmentVariable("OLLAMA_TEXT")!,
+                        apiKey: "ollama",
+                        endpoint: new Uri(endpoint)
+                    );
+#pragma warning restore SKEXP0010
+            }
+            else if (!weakGpt)
             {
                 Console.WriteLine($"used model for intelligent tasks: {Environment.GetEnvironmentVariable("AZURE_OPENAI_MODEL")}");
                 builder = Kernel.CreateBuilder()
@@ -113,10 +134,10 @@ namespace localRAG
                         Auth = AzureOpenAIConfig.AuthTypes.APIKey,
                         APIKey = EnvVar("AZURE_OPENAI_API_KEY"),
                     })
-                    .WithMongoDbAtlasMemoryDbAndDocumentStorage(mongoConfig)
-                    //.WithSimpleFileStorage(SimpleFileStorageConfig.Persistent)
-                    //.WithSimpleTextDb(SimpleTextDbConfig.Persistent)
-                    //.WithSimpleVectorDb(SimpleVectorDbConfig.Persistent)
+                    //.WithMongoDbAtlasMemoryDbAndDocumentStorage(mongoConfig)
+                    .WithSimpleFileStorage()
+                    .WithSimpleTextDb()
+                    .WithSimpleVectorDb()
                     // use the dateformat schema from '2010-04-16T10:00:00.000Z'
                     //.With(new MsExcelDecoderConfig { DateFormat = "yyyy-MM-ddTHH:mm:ss.fffZ", DateFormatProvider = CultureInfo.InvariantCulture })
                     .WithCustomImageOcr(new TesseractOCR())
@@ -146,6 +167,9 @@ namespace localRAG
                 return (T)(IKernelMemory)new KernelMemoryBuilder()
                 .WithOllamaTextGeneration(config, new CL100KTokenizer())
                 .WithOllamaTextEmbeddingGeneration(config, new CL100KTokenizer())
+                .WithSimpleFileStorage("tmp-data")
+                .WithSimpleVectorDb("tmp-data")
+                .WithContentDecoder<CustomPdfDecoder>()
                 .Build();
             }
         }
@@ -157,6 +181,11 @@ namespace localRAG
         {
             return Environment.GetEnvironmentVariable(name)
                    ?? throw new ArgumentException($"Env var {name} not set");
+        }
+
+        public static string EnvVarOrDefault(string name, string defaultValue)
+        {
+            return Environment.GetEnvironmentVariable(name) ?? defaultValue;
         }
 
         public static string ChatHistoryToString(ChatHistory chatHist, string? userInput)

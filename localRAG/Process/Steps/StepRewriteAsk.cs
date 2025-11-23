@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using localRAG.Utilities;
 using Microsoft.Extensions.Logging;
@@ -37,25 +40,45 @@ namespace localRAG.Process.Steps
             try
             {
                 var userask = await kernel.InvokeAsync<string>(rewriteUserAskPrompt, new() { ["question"] = messages });
-                userask = userask.Replace("```json\n", "").Replace("```", "").Trim();
-                logger.LogInformation("Rewritten user ask: " + userask);
+                userask = SanitizePluginResponse(userask);
 
-                rewrittenQuestions = JsonSerializer.Deserialize<List<UserAsk>>(userask);
-                // if result is null take userinput as rewritten question, else take the result and order it by score, highest first!
-                if (rewrittenQuestions == null)
+                if (!LooksLikeJson(userask))
                 {
-                    rewrittenQuestions = new List<UserAsk> { new UserAsk { StandaloneQuestion = userInput } };
+                    LogMalformedPayload(logger, userask);
+                    rewrittenQuestions = [new UserAsk { StandaloneQuestion = userInput }];
                 }
                 else
                 {
-                    rewrittenQuestions = rewrittenQuestions.OrderByDescending(x => x.Score).ToList();
+                    rewrittenQuestions = JsonSerializer.Deserialize<List<UserAsk>>(userask, new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true
+                    }) ?? new List<UserAsk>();
                 }
+
+                if (rewrittenQuestions.Count == 0)
+                {
+                    rewrittenQuestions = [new UserAsk { StandaloneQuestion = userInput }];
+                }
+                else
+                {
+                    rewrittenQuestions = rewrittenQuestions
+                        .Where(q => !string.IsNullOrWhiteSpace(q?.StandaloneQuestion))
+                        .OrderByDescending(x => x.Score)
+                        .DefaultIfEmpty(new UserAsk { StandaloneQuestion = userInput })
+                        .ToList();
+                }
+
                 logger.LogInformation("[DEBUG] Step: RewriteAskStep - Rewritten questions produced");
+            }
+            catch (JsonException jsonEx)
+            {
+                logger.LogWarning(jsonEx, "RewriteUserAskPlugin returned invalid JSON payload, using fallback.");
+                rewrittenQuestions = [new UserAsk { StandaloneQuestion = userInput }];
             }
             catch (System.Exception e)
             {
-                logger.LogError("Error in rewriting user ask: " + e.Message);
-                logger.LogError($"\tUser ask: \n\t{rewrittenQuestions!.Aggregate("", (acc, item) => acc + "\n" + item.StandaloneQuestion)}");
+                logger.LogError(e, "Unexpected error while rewriting user ask, falling back to original question.");
+                rewrittenQuestions = [new UserAsk { StandaloneQuestion = userInput }];
             }
 
             var searchData = new SearchData
@@ -71,6 +94,51 @@ namespace localRAG.Process.Steps
                     Id = OutputEvents.RewriteUsersAskReceived,
                     Data = searchData
                 });
+        }
+
+        private static string SanitizePluginResponse(string? payload)
+        {
+            if (string.IsNullOrWhiteSpace(payload))
+            {
+                return string.Empty;
+            }
+
+            var cleaned = payload
+                .Replace("```json", string.Empty, StringComparison.OrdinalIgnoreCase)
+                .Replace("```", string.Empty, StringComparison.OrdinalIgnoreCase)
+                .Trim();
+
+            // Strip <think>...</think> reasoning blocks that some models emit
+            var thinkStartIndex = cleaned.IndexOf("<think>", StringComparison.OrdinalIgnoreCase);
+            if (thinkStartIndex >= 0)
+            {
+                var thinkEndIndex = cleaned.IndexOf("</think>", thinkStartIndex, StringComparison.OrdinalIgnoreCase);
+                if (thinkEndIndex >= 0)
+                {
+                    // Remove everything from <think> to </think> inclusive
+                    cleaned = cleaned.Remove(thinkStartIndex, thinkEndIndex - thinkStartIndex + "</think>".Length).Trim();
+                }
+            }
+
+            return cleaned;
+        }
+
+        private static bool LooksLikeJson(string payload)
+        {
+            if (string.IsNullOrWhiteSpace(payload))
+            {
+                return false;
+            }
+
+            var trimmed = payload.TrimStart();
+            return trimmed.StartsWith("[") || trimmed.StartsWith("{");
+        }
+
+        private static void LogMalformedPayload(ILogger logger, string payload)
+        {
+            var preview = payload.Length > 300 ? payload[..300] + "..." : payload;
+            logger.LogWarning("RewriteUserAskPlugin did not return JSON. Preview: {Preview}", preview);
+            TraceLogger.Log($"RewriteAskStep received non-JSON payload: {preview}");
         }
     }
 }
