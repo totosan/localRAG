@@ -218,22 +218,41 @@ namespace localRAG
             IEnumerable<KeyValuePair<string, string>> ENV = DotNetEnv.Env.Load(".env");
             var tagsFile = Helpers.EnvVar("TAGS_COLLECTION_FILE") ?? throw new Exception("TAGS not found in .env file");
             var tagsFileText = await File.ReadAllTextAsync(tagsFile);
-            // Deserialize the JSON into a dictionary
-            var rawCategories = JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, List<string>>>>(tagsFileText);
-
+            
+            // Try to deserialize as flat structure first (current tags.json format)
+            var flatStructure = JsonSerializer.Deserialize<Dictionary<string, List<string>>>(tagsFileText);
+            
             // Create a new instance of DocumentCategories
             var documentCategories = new DocumentCategories();
 
-            // Loop through the dictionary and populate the DocumentCategories instance
-            foreach (var category in rawCategories)
+            if (flatStructure != null)
             {
-                var documentCategory = new DocumentCategory();
-                foreach (var subcategory in category.Value)
+                // Convert flat structure to nested DocumentCategories
+                // Each top-level key becomes both a category and subcategory
+                foreach (var item in flatStructure)
                 {
-                    var documentQuestions = new DocumentQuestions { Questions = subcategory.Value };
-                    documentCategory.Subcategories[subcategory.Key] = documentQuestions;
+                    var documentCategory = new DocumentCategory();
+                    var documentQuestions = new DocumentQuestions { Questions = item.Value };
+                    documentCategory.Subcategories[item.Key] = documentQuestions;
+                    documentCategories.Categories[item.Key] = documentCategory;
                 }
-                documentCategories.Categories[category.Key] = documentCategory;
+            }
+            else
+            {
+                // Fallback: try nested structure
+                var rawCategories = JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, List<string>>>>(tagsFileText);
+                
+                // Loop through the dictionary and populate the DocumentCategories instance
+                foreach (var category in rawCategories ?? new Dictionary<string, Dictionary<string, List<string>>>())
+                {
+                    var documentCategory = new DocumentCategory();
+                    foreach (var subcategory in category.Value)
+                    {
+                        var documentQuestions = new DocumentQuestions { Questions = subcategory.Value };
+                        documentCategory.Subcategories[subcategory.Key] = documentQuestions;
+                    }
+                    documentCategories.Categories[category.Key] = documentCategory;
+                }
             }
 
             return documentCategories;

@@ -38,7 +38,7 @@ namespace localRAG
                            Sometimes you don't have relevant memories so you reply saying you don't know, don't have the information.
                            For retrieving information to answer complex questions, you have to first plan your search strategy by deciding which steps to take.
                            Please first come up with a plan and then execute it. You can ask for help if you are stuck.
-                           Always respond with the source' name and partition nr in Format [DocName:PartitionNr] if you provide information from a document.
+                           Always respond with the source' name, file path, partition path and partition nr in Format [DocName (FilePath) (PartitionPath):PartitionNr] if you provide information from a document.
                            """;
         private const string SK_PROMPT_ASK = """
                        Question: {{$input}}
@@ -54,11 +54,26 @@ namespace localRAG
         static bool DEBUG_KERNEL35 = false;
         static bool DEBUG_KERNEL = false;
         static bool DEBUG_MEMORY = false;
+        static bool USE_AZURE_FOR_INTENTS = false;
 
         public static async Task Main(string[] args)
         {
+            // Show help if requested
+            if (args.Contains("--help") || args.Contains("-h"))
+            {
+                PrintHelp();
+                return;
+            }
+
             PrintFancyTitle();
             IEnumerable<KeyValuePair<string, string>> ENV = DotNetEnv.Env.Load(".env");
+
+            bool useAzureForIntents = args.Contains("--azure-intents");
+            USE_AZURE_FOR_INTENTS = useAzureForIntents;
+            if (useAzureForIntents)
+            {
+                AnsiConsole.MarkupLine("[bold cyan]Using Azure OpenAI for IntentsPlugin generation[/]");
+            }
 
             if (args.Contains("--ollama") || args.Contains("--local"))
             {
@@ -189,7 +204,15 @@ namespace localRAG
             {
                 await ImportDocumentsAsync(kernel35, memoryConnector, promptPlugins);
             }
-            //await CreateIntentionsAsync(memoryConnector);
+            
+            // Create intent index from tags.json when --index flag is present
+            bool createIntentIndex = args.Contains("--index");
+            if (createIntentIndex || !File.Exists(tagsPath))
+            {
+                Console.WriteLine("[ASSISTANT] Creating intent index from tags.json...");
+                await CreateIntentionsAsync(memoryConnector);
+                Console.WriteLine("[ASSISTANT] Intent index created successfully.");
+            }
 
             // ==================================
             // === Create Process WF for RAG ===
@@ -256,6 +279,8 @@ namespace localRAG
 #pragma warning restore SKEXP0080 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
         }
+
+
 
         private static async Task ImportDocumentsAsync(Kernel kernel, MemoryServerless memoryConnector, KernelPlugin prompts)
         {
@@ -330,6 +355,23 @@ namespace localRAG
                 }
             }
 
+            // Extract JSON from preamble text (e.g., "Here are the artefacts: {...}")
+            var firstBrace = cleaned.IndexOf('{');
+            var lastBrace = cleaned.LastIndexOf('}');
+            if (firstBrace >= 0 && lastBrace > firstBrace)
+            {
+                cleaned = cleaned.Substring(firstBrace, lastBrace - firstBrace + 1).Trim();
+            }
+
+            // Fix embedded newlines in JSON strings by replacing them with \n escape sequence
+            // This handles cases where LLM puts literal newlines inside quoted strings
+            cleaned = System.Text.RegularExpressions.Regex.Replace(
+                cleaned,
+                @"(""[^""]*?)\r?\n([^""]*?"")",
+                "$1\\n$2",
+                System.Text.RegularExpressions.RegexOptions.Singleline
+            );
+
             return cleaned;
         }
 
@@ -396,8 +438,22 @@ namespace localRAG
                 mainTags
             ));
 
-            var kernel = Helpers.GetSemanticKernel(debug: DEBUG_KERNEL);
-            var prompts = kernel.ImportPluginFromPromptDirectory(Path.Combine(Directory.GetCurrentDirectory(), "Plugins/Prompts"));
+            // Use Azure OpenAI for IntentsPlugin if --azure-intents flag is set (more reliable JSON)
+            // Otherwise use local gpt-oss:20b model (default)
+            Kernel kernelForIntents;
+            if (USE_AZURE_FOR_INTENTS)
+            {
+                var originalOllamaValue = Environment.GetEnvironmentVariable("USE_OLLAMA");
+                Environment.SetEnvironmentVariable("USE_OLLAMA", "false");
+                kernelForIntents = Helpers.GetSemanticKernel(debug: DEBUG_KERNEL);
+                Environment.SetEnvironmentVariable("USE_OLLAMA", originalOllamaValue);
+            }
+            else
+            {
+                // Use same Ollama kernel (gpt-oss:20b)
+                kernelForIntents = Helpers.GetSemanticKernel(debug: DEBUG_KERNEL);
+            }
+            var prompts = kernelForIntents.ImportPluginFromPromptDirectory(Path.Combine(Directory.GetCurrentDirectory(), "Plugins/Prompts"));
 
             // Now that the handler is registered, load and process the documents
             AnsiConsole.MarkupLine($"[bold blue]Loading and processing documents from:[/] [underline yellow]{IMPORT_PATH}[/]");
@@ -438,7 +494,7 @@ namespace localRAG
             await AnsiConsole.Status()
                 .StartAsync("[bold yellow]Generating questions for tags using IntentsPlugin...[/]", async ctx =>
                 {
-                    var result = await kernel.InvokeAsync<string>(
+                    var result = await kernelForIntents.InvokeAsync<string>(
                         prompts["IntentsPlugin"],
                         new() { ["input"] = JsonSerializer.Serialize(tagSerializationInput) }
                     );
@@ -461,7 +517,7 @@ namespace localRAG
                                 : intentListWithQuestions;
                             TraceLogger.Log($"[IntentsPlugin] Non-JSON output ignored: {preview}");
                             AnsiConsole.MarkupLine("[yellow]Warning:[/] IntentsPlugin returned non-JSON content; skipping tag question generation for this run.");
-                            AnsiConsole.MarkupLine($"[dim]Parser error:[/] {ex.Message}");
+                            AnsiConsole.MarkupLine($"[dim]Parser error:[/] {ex.Message.EscapeMarkup()}");
                         }
                     }
 
@@ -505,6 +561,59 @@ namespace localRAG
         public static void DebugStep(string stepName, string message)
         {
             AnsiConsole.MarkupLine($"[bold blue][[DEBUG]][/] [bold yellow]Step:[/] [green]{stepName}[/] - {message}");
+        }
+
+        public static void PrintHelp()
+        {
+            AnsiConsole.Clear();
+            AnsiConsole.Write(
+                new FigletText("localRAG")
+                    .Centered()
+                    .Color(Color.Cyan1));
+            AnsiConsole.MarkupLine("[bold blue]Local Retrieval-Augmented Generation Assistant[/]\n");
+
+            var table = new Table()
+                .Border(TableBorder.Rounded)
+                .BorderColor(Color.Grey)
+                .AddColumn(new TableColumn("[bold yellow]Flag[/]").Centered())
+                .AddColumn(new TableColumn("[bold yellow]Description[/]"));
+
+            table.AddRow(
+                "[cyan]--help, -h[/]",
+                "Display this help message");
+
+            table.AddRow(
+                "[cyan]--ollama, --local[/]",
+                "Use local Ollama models\n[dim](gpt-oss:20b for text, qllama/bge-reranker-v2-m3 for embeddings)[/]");
+
+            table.AddRow(
+                "[cyan]--import[/]",
+                "Force re-import documents from IMPORT_PATH\n[dim](Regenerates embeddings and tags.json)[/]");
+
+            table.AddRow(
+                "[cyan]--index[/]",
+                "Force re-import AND create intent index\n[dim](Implies --import, plus generates intent index)[/]");
+
+            table.AddRow(
+                "[cyan]--azure-intents[/]",
+                "Use Azure OpenAI for IntentsPlugin generation\n[dim](Fallback for JSON issues with local models)[/]\n[dim]Default: Uses local gpt-oss:20b[/]");
+
+            AnsiConsole.Write(table);
+
+            AnsiConsole.MarkupLine("\n[bold green]Examples:[/]");
+            AnsiConsole.MarkupLine("  [dim]# Use local models for everything[/]");
+            AnsiConsole.MarkupLine("  [cyan]dotnet run -- --ollama --import[/]\n");
+            
+            AnsiConsole.MarkupLine("  [dim]# Use Azure OpenAI only for IntentsPlugin[/]");
+            AnsiConsole.MarkupLine("  [cyan]dotnet run -- --ollama --import --azure-intents[/]\n");
+
+            AnsiConsole.MarkupLine("  [dim]# Re-import and create intent index[/]");
+            AnsiConsole.MarkupLine("  [cyan]dotnet run -- --ollama --index[/]\n");
+            
+            AnsiConsole.MarkupLine("  [dim]# Normal run (no re-import)[/]");
+            AnsiConsole.MarkupLine("  [cyan]dotnet run -- --ollama[/]\n");
+
+            AnsiConsole.MarkupLine("[dim]Configuration: Edit .env file to set IMPORT_PATH, API keys, and model settings[/]");
         }
 
         public static void PrintFancyTitle()

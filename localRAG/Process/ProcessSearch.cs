@@ -68,6 +68,8 @@ namespace localRAG.Process
         public string UserMessage { get; set; } = string.Empty;
         public List<UserAsk> StandaloneQuestions { get; set; } = new();
         public List<string>? Intents { get; internal set; }
+        public List<string>? KeywordFilters { get; internal set; }
+        public bool RagPerformed { get; set; } = false;
     }
 #pragma warning restore SKEXP0080 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 }

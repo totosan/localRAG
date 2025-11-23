@@ -10,6 +10,7 @@ using localRAG.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.KernelMemory;
+using Microsoft.KernelMemory.AI;
 using Microsoft.KernelMemory.Context;
 using Microsoft.SemanticKernel;
 using Microsoft.SemanticKernel.ChatCompletion;
@@ -259,13 +260,27 @@ namespace localRAG.Utilities
         /// <returns>A list of intent strings found in memory.</returns>
         public static async Task<List<string>> AskForIntentAsync(string request, IKernelMemory s_memory)
         {
-            SearchResult answer = await s_memory.SearchAsync(request, index: "intent", minRelevance: 0.70, limit: 3);
+            TraceLogger.Log($"[AskForIntentAsync] Searching intent index for: {request}");
+            
+            // DEBUG: Test if default index works
+            var defaultTest = await s_memory.SearchAsync(request, index: "default", minRelevance: 0.0, limit: 3);
+            TraceLogger.Log($"[AskForIntentAsync] DEBUG - Default index returned {defaultTest.Results.Count} results");
+            
+            // Set minRelevance to 0.0 (0%) to see ALL results regardless of relevance
+            SearchResult answer = await s_memory.SearchAsync(request, index: "intent", minRelevance: 0.0, limit: 10);
+            TraceLogger.Log($"[AskForIntentAsync] Found {answer.Results.Count} results in intent index");
+            
             List<string> intents = new List<string>();
             foreach (Citation result in answer.Results)
             {
+                var relevance = result.Partitions.FirstOrDefault()?.Relevance ?? 0;
+                TraceLogger.Log($"[AskForIntentAsync] Result relevance: {relevance:F3}, text: {result.Partitions.FirstOrDefault()?.Text?.Substring(0, Math.Min(50, result.Partitions.FirstOrDefault()?.Text?.Length ?? 0))}");
                 var retrievedIntents = GetTagValue(result, "intent", "none");
                 var retrievedMainIntents = GetTagValue(result, "mainintent", "none");
-                if (false && retrievedIntents != null &&
+                TraceLogger.Log($"[AskForIntentAsync] Retrieved intent tag: {retrievedIntents}, mainintent: {retrievedMainIntents}");
+                
+                // Check both 'intent' and 'mainintent' tags
+                if (retrievedIntents != null &&
                      intents.Find(i => i == retrievedIntents) == null)
                 {
                     intents.Add(retrievedIntents);
@@ -287,10 +302,11 @@ namespace localRAG.Utilities
         /// <param name="query">The query string to search for in the memory.</param>
         /// <param name="asChunks">Whether to fetch the memory as chunks. Default is true.</param>
         /// <param name="intents">Optional list of intent filters.</param>
+        /// <param name="keywordFilters">Optional list of keyword filters for hybrid search routing.</param>
         /// <returns>A JSON string containing the retrieved memory as a list of DocumentsSimple objects.</returns>
-        public static async Task<string> GetLongTermMemory(IKernelMemory memory, string query, bool asChunks = true, List<string> intents = null)
+        public static async Task<string> GetLongTermMemory(IKernelMemory memory, string query, bool asChunks = true, List<string> intents = null, List<string> keywordFilters = null)
         {
-
+            var importPath = Helpers.EnvVar("IMPORT_PATH") ?? "imported-documents";
             var context = new RequestContext();
             // Use a custom template for facts
             context.SetArg("custom_rag_fact_template_str", "=== Last update: {{$meta[last_update]}} ===\n{{$content}}\n");
@@ -314,12 +330,26 @@ namespace localRAG.Utilities
                 // Fetch raw chunks, using KM indexes. More tokens to process with the chat history, but only one LLM request.
                 List<MemoryFilter> filters = new List<MemoryFilter>();
                 SearchResult memories = new SearchResult();
-                if (intents != null)
+                
+                // Build filters from both intents (categories) and keywords
+                if (intents != null && intents.Count > 0)
                 {
                     foreach (var intent in intents)
                     {
                         filters.Add(MemoryFilters.ByTag("intent", intent));
                     }
+                }
+                
+                if (keywordFilters != null && keywordFilters.Count > 0)
+                {
+                    foreach (var keyword in keywordFilters)
+                    {
+                        filters.Add(MemoryFilters.ByTag("keywords", keyword));
+                    }
+                }
+
+                if (filters.Count > 0)
+                {
                     //filters.Add(MemoryFilters.ByDocument("EDDECB333E4D891C10661DA505D327560B40BEFC0C9254D5B3B580BF379A0008"));
                     memories = await memory.SearchAsync(query, minRelevance: 0.4, limit: 3, filters: filters, context: context);
                 }
@@ -341,6 +371,8 @@ namespace localRAG.Utilities
                             {
                                 DocumentId = result.DocumentId,
                                 SourceName = result.SourceName,
+                                FilePath = Path.GetFullPath(Path.Combine(importPath, result.SourceName)),
+                                PartitionPath = Path.GetFullPath(Path.Combine("tmp-data", "default", result.DocumentId, $"{result.SourceName}.partition.{partition.PartitionNumber}.txt")),
                                 PartitionNumber = partition.PartitionNumber,
                                 Content = partition.Text,
                                 Score = float.IsNaN(partition.Relevance) || float.IsInfinity(partition.Relevance) ? 0 : partition.Relevance
@@ -366,6 +398,8 @@ namespace localRAG.Utilities
                     {
                         DocumentId = doc.DocumentId,
                         SourceName = doc.SourceName,
+                        FilePath = Path.GetFullPath(Path.Combine(importPath, doc.SourceName)),
+                        PartitionPath = Path.GetFullPath(Path.Combine("tmp-data", "default", doc.DocumentId, $"{doc.SourceName}.partition.{part.PartitionNumber}.txt")),
                         PartitionNumber = part.PartitionNumber,
                         Content = part.Text,
                         Score = part.Relevance
@@ -506,11 +540,35 @@ namespace localRAG.Utilities
 
         /// <summary>
         /// Creates intent documents in memory from provided intent samples, uploading each question as a document with tags.
+        /// NOTE: Uses direct IMemoryDb.UpsertAsync to bypass the KM pipeline, as Simple Vector DB requires MemoryRecord JSON format.
         /// </summary>
         /// <param name="memoryConnector">The kernel memory connector instance.</param>
         /// <param name="intentSamples">The intent samples containing categories and questions.</param>
         public static async Task CreateIntents(IKernelMemory memoryConnector, DocumentCategories intentSamples)
         {
+            // Create IMemoryDb and embedding generator directly
+            // We bypass the KM pipeline because Simple Vector DB needs MemoryRecord JSON format,
+            // not the chunked/partitioned format that the pipeline produces
+            var ollamaConfig = new Microsoft.KernelMemory.AI.Ollama.OllamaConfig
+            {
+                Endpoint = Helpers.EnvVar("OLLAMA_ENDPOINT"),
+                TextModel = new Microsoft.KernelMemory.AI.Ollama.OllamaModelConfig(Helpers.EnvVar("OLLAMA_TEXT")),
+                EmbeddingModel = new Microsoft.KernelMemory.AI.Ollama.OllamaModelConfig(Helpers.EnvVar("OLLAMA_EMBEDDING"))
+            };
+            
+            var embeddingGen = new Microsoft.KernelMemory.AI.Ollama.OllamaTextEmbeddingGenerator(ollamaConfig, textTokenizer: new CL100KTokenizer());
+            var vectorDbConfig = new Microsoft.KernelMemory.MemoryStorage.DevTools.SimpleVectorDbConfig 
+            { 
+                StorageType = Microsoft.KernelMemory.FileSystem.DevTools.FileSystemTypes.Disk,
+                Directory = "tmp-data"
+            };
+#pragma warning disable KMEXP03 // Type is for evaluation purposes only
+            var memoryDb = new Microsoft.KernelMemory.MemoryStorage.DevTools.SimpleVectorDb(vectorDbConfig, embeddingGen);
+#pragma warning restore KMEXP03
+            
+            // Ensure the intent index exists
+            await memoryDb.CreateIndexAsync("intent", vectorSize: 768); // nomic-embed-text produces 768-dim vectors
+            
             foreach (var category in intentSamples.Categories)
             {
                 foreach (var sub in category.Value.Subcategories)
@@ -518,14 +576,31 @@ namespace localRAG.Utilities
                     foreach (var question in sub.Value.Questions)
                     {
                         var docId = Helpers.HashThis(question);
-                        if (await memoryConnector.IsDocumentReadyAsync(docId))
-                        {
-                            return;
-                        }
-
+                        
                         Console.WriteLine($"Uploading intent {sub.Key} with question: {question}");
-                        await memoryConnector.ImportTextAsync(question, tags: new TagCollection() { { "intent", sub.Key }, { "mainintent", category.Key } }, documentId: docId, index: "intent");
-                        Console.WriteLine($"- Document Id: {docId}");
+                        
+                        // Generate embedding for the question
+                        var embedding = await embeddingGen.GenerateEmbeddingAsync(question);
+                        
+                        // Create a MemoryRecord directly (the format Simple Vector DB expects)
+                        var record = new Microsoft.KernelMemory.MemoryStorage.MemoryRecord
+                        {
+                            Id = docId,
+                            Vector = embedding,
+                            Tags = new Microsoft.KernelMemory.TagCollection 
+                            { 
+                                { "intent", sub.Key }, 
+                                { "mainintent", category.Key } 
+                            },
+                            Payload = new Dictionary<string, object>
+                            {
+                                { Microsoft.KernelMemory.Constants.ReservedPayloadTextField, question }
+                            }
+                        };
+                        
+                        // Upsert directly to the vector DB (bypassing the KM pipeline)
+                        await memoryDb.UpsertAsync("intent", record);
+                        Console.WriteLine($"- Document Id: {docId} uploaded directly to intent index");
                     }
                 }
             }

@@ -5,6 +5,8 @@ using System.Text.Json;
 using localRAG.Utilities;
 using Microsoft.Extensions.Logging;
 using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.Connectors.OpenAI;
+using Microsoft.SemanticKernel.ChatCompletion;
 using MongoDB.Driver.Linq;
 
 namespace localRAG.Process.Steps
@@ -28,6 +30,7 @@ namespace localRAG.Process.Steps
         public async Task RewriteAskAsync(KernelProcessStepContext context, string userInput, Kernel _kernel)
         {
             Console.WriteLine("[DEBUG] Step: RewriteAskStep - RewriteAskAsync called");
+            TraceLogger.Log($"[RewriteAskStep] Original user input: {userInput}");
             var logger = _kernel.GetRequiredService<ILogger<RewriteAskStep>>();
             var chatHist = await _kernel.GetHistory().GetHistoryAsync();
             var kernel = _kernel;
@@ -36,10 +39,30 @@ namespace localRAG.Process.Steps
             var rewriteUserAskPrompt = promptPlugins["RewriteUserAskPlugin"];
 
             List<UserAsk> rewrittenQuestions = new();
-            var messages = Helpers.ChatHistoryToString(chatHist, userInput);
+            // Only rewrite the last user question (current userInput), not the entire chat history
+            var messages = userInput;
+            
+            // Create execution settings with JSON format enforcement
+            // For Ollama via OpenAI connector: use "json_object" as the type
+            var executionSettings = new OpenAIPromptExecutionSettings
+            {
+                Temperature = 0.2,  // Lower temperature for more deterministic output
+                ResponseFormat = new { type = "json_object" }  // Proper format object for JSON output
+            };
+
             try
             {
-                var userask = await kernel.InvokeAsync<string>(rewriteUserAskPrompt, new() { ["question"] = messages });
+                var userask = await kernel.InvokeAsync<string>(
+                    rewriteUserAskPrompt, 
+                    new KernelArguments(executionSettings) 
+                    { 
+                        ["question"] = messages 
+                    });
+                
+                // Log raw response for debugging
+                logger.LogInformation($"[DEBUG] Raw LLM response: {userask}");
+                TraceLogger.Log($"[RewriteAskStep] Raw response from LLM: {userask}");
+                
                 userask = SanitizePluginResponse(userask);
 
                 if (!LooksLikeJson(userask))
@@ -69,6 +92,12 @@ namespace localRAG.Process.Steps
                 }
 
                 logger.LogInformation("[DEBUG] Step: RewriteAskStep - Rewritten questions produced");
+                TraceLogger.Log($"[RewriteAskStep] Generated {rewrittenQuestions.Count} rewritten question(s):");
+                for (int i = 0; i < rewrittenQuestions.Count; i++)
+                {
+                    var q = rewrittenQuestions[i];
+                    TraceLogger.Log($"  [{i + 1}] Score={q.Score:F2} Question=\"{q.StandaloneQuestion}\"");
+                }
             }
             catch (JsonException jsonEx)
             {

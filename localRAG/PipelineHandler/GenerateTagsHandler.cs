@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using localRAG;
 using localRAG.Models;
+using localRAG.Utilities;
 using Microsoft.Extensions.Logging;
 using Microsoft.KernelMemory.AI;
 using Microsoft.KernelMemory.Context;
@@ -147,13 +148,28 @@ public sealed class GenerateTagsHandler : IPipelineStepHandler
                     case MimeTypes.MarkDown:
                         this._log.LogDebug("Generating ToC file {0}", file.Name);
                         string content = (await this._orchestrator.ReadFileAsync(pipeline, file.Name, cancellationToken).ConfigureAwait(false)).ToString();
+                        
+                        // Extract keywords using rule-based approach (TF-IDF + RAKE-inspired)
+                        var extractedKeywords = KeywordExtractor.ExtractKeywords(content, maxKeywords: 10);
+                        var namedEntities = KeywordExtractor.ExtractNamedEntities(content, maxEntities: 5);
+                        
+                        // Store keywords as tags for hybrid search
+                        var keywordTags = new List<string?>();
+                        keywordTags.AddRange(extractedKeywords);
+                        keywordTags.AddRange(namedEntities);
+                        
+                        this._log.LogInformation("Extracted {0} keywords from {1}: {2}", 
+                            keywordTags.Count, file.Name, string.Join(", ", keywordTags));
+                        
+                        // Also get category tags from LLM (original behavior)
                         (string summary, bool success) = await this.GetTagsAsync(content, pipeline.GetContext()).ConfigureAwait(false);
                         if (success)
                         {
                             try
                             {
-                                // remove ```json from the summary
-                                summary = summary.Replace("```json", "").Replace("```", "").Trim();
+                                // Clean up the response - handle both reasoning model output and normal output
+                                summary = CleanJsonFromLLMResponse(summary);
+                                
                                 // read the summary, which is a string containing json and convert it to a dictionary
                                 var tags = JsonSerializer.Deserialize<IDictionary<string, List<string?>>>(summary);
 
@@ -175,16 +191,23 @@ public sealed class GenerateTagsHandler : IPipelineStepHandler
                                         {
                                             tagsList.AddRange(tag.Value);
                                         }
-                                        // Assuming PrintSuggestion is a helper method that can handle nullable strings
-                                        // PrintSuggestion(tag);
                                     }
                                     pipeline.Tags["intent"] = tagsList;
+                                    
+                                    // Store extracted keywords separately for demonstration
+                                    pipeline.Tags["keywords"] = keywordTags.Cast<string>().ToList<string>();
                                 }
                             }
                             catch (System.Text.Json.JsonException e)
                             {
                                 _log.LogError("Error while deserializing the tag list: {0}", e.Message);
                             }
+                        }
+                        else
+                        {
+                            // If LLM categorization fails, at least save the keywords
+                            pipeline.Tags["keywords"] = keywordTags.Cast<string>().ToList<string>();
+                            this._log.LogWarning("LLM categorization failed, using keywords only for {0}", file.Name);
                         }
 
                         break;
@@ -327,9 +350,34 @@ public sealed class GenerateTagsHandler : IPipelineStepHandler
 
                 var tagtext = TransformTagsToString();
                 var filledPrompt = summarizationPrompt.Replace("{{$tags}}", tagtext).Replace("{{$input}}", paragraph, StringComparison.OrdinalIgnoreCase);
-                await foreach (var token in textGenerator.GenerateTextAsync(filledPrompt, new TextGenerationOptions()).ConfigureAwait(false))
+                
+                // Add protection against infinite token generation (common with reasoning models)
+                int maxOutputTokens = 2000; // Reasonable limit for tag generation
+                int tokenCount = 0;
+                var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(60)); // 60 second timeout
+                
+                try
                 {
-                    newContent.Append(token);
+                    await foreach (var token in textGenerator.GenerateTextAsync(filledPrompt, new TextGenerationOptions()).WithCancellation(timeoutCts.Token).ConfigureAwait(false))
+                    {
+                        newContent.Append(token);
+                        tokenCount++;
+                        
+                        // Stop if we exceed reasonable token count (prevents runaway generation)
+                        if (tokenCount >= maxOutputTokens)
+                        {
+                            this._log.LogWarning("Tag generation exceeded {0} tokens, stopping early. Consider using a non-reasoning model.", maxOutputTokens);
+                            break;
+                        }
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    this._log.LogWarning("Tag generation timed out after 60 seconds. Using partial result. Consider using a faster model like llama3.2 instead of reasoning models.");
+                }
+                finally
+                {
+                    timeoutCts.Dispose();
                 }
 
                 newContent.AppendLine();
@@ -370,5 +418,37 @@ public sealed class GenerateTagsHandler : IPipelineStepHandler
         }
 
         return string.Join(", ", result);
+    }
+
+    /// <summary>
+    /// Extract JSON from LLM response that may contain reasoning traces (like DeepSeek-R1)
+    /// Reasoning models often output: <think>reasoning...</think> {json}
+    /// </summary>
+    private static string CleanJsonFromLLMResponse(string response)
+    {
+        if (string.IsNullOrWhiteSpace(response))
+            return response;
+
+        // Remove code fence markers
+        response = response.Replace("```json", "").Replace("```", "").Trim();
+
+        // For reasoning models (DeepSeek-R1, QwQ, etc.), extract JSON after thinking tags
+        // Pattern: <think>...</think> {actual json}
+        var thinkEndIndex = response.LastIndexOf("</think>", StringComparison.OrdinalIgnoreCase);
+        if (thinkEndIndex >= 0)
+        {
+            response = response.Substring(thinkEndIndex + 8).Trim(); // Skip past "</think>"
+        }
+
+        // Find the first { and last } to extract pure JSON
+        var firstBrace = response.IndexOf('{');
+        var lastBrace = response.LastIndexOf('}');
+        
+        if (firstBrace >= 0 && lastBrace >= 0 && lastBrace > firstBrace)
+        {
+            response = response.Substring(firstBrace, lastBrace - firstBrace + 1);
+        }
+
+        return response.Trim();
     }
 }

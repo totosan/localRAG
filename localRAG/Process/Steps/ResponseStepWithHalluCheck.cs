@@ -21,7 +21,6 @@ namespace localRAG.Process.Steps
         [KernelFunction(Functions.GetChatResponse)]
         public async Task GetChatResponseAsync(KernelProcessStepContext context, SearchData searchData, Kernel _kernel)
         {
-            Console.WriteLine("[DEBUG] Step: ResponseStepWithHalluCheck - GetChatResponseAsync called");
             ChatMessageContent response = new(AuthorRole.Assistant, "I'm sorry, I don't have a response for that.");
             var userMessage = searchData.StandaloneQuestions.First().StandaloneQuestion;
 
@@ -29,6 +28,7 @@ namespace localRAG.Process.Steps
             chatHist.Add(new(AuthorRole.User, userMessage));
             IChatCompletionService chatService = _kernel.Services.GetRequiredService<IChatCompletionService>();
             response = await chatService.GetChatMessageContentAsync(chatHist).ConfigureAwait(false);
+            
             if (response == null)
             {
                 throw new InvalidOperationException("Failed to get a response from the chat completion service.");
@@ -44,33 +44,19 @@ namespace localRAG.Process.Steps
                 }
             }
 
-            // Hallucination check
-            bool isGrounded = HallucinationCheckPlugin.IsGrounded(response.Content, contextChunks, minOverlap: 3);
-            Console.WriteLine($"[DEBUG] Step: ResponseStepWithHalluCheck - Hallucination check result: {(isGrounded ? "grounded" : "hallucination detected")}");
-
-            // If no context is found, run a self-critique/fact-check LLM prompt
-            if (contextChunks.Count == 0 && !string.IsNullOrWhiteSpace(response.Content))
+            // Only perform hallucination check if RAG was actually performed
+            bool performHallucinationCheck = searchData.RagPerformed;
+            bool isGrounded = true;  // Default to grounded if no RAG
+            
+            if (performHallucinationCheck)
             {
-                Console.WriteLine("[DEBUG] Step: ResponseStepWithHalluCheck - No context found, running self-critique LLM prompt");
-                var critiquePrompt = $"You are an expert fact-checker. Given the following answer, is it factual and verifiable? If not, explain why. If you are not sure, say 'I don't know.'\n\nAnswer: {response.Content}";
-                var critiqueService = _kernel.Services.GetRequiredService<IChatCompletionService>();
-                var critiqueResponse = await critiqueService.GetChatMessageContentAsync(critiquePrompt).ConfigureAwait(false);
-                if (critiqueResponse != null && !string.IsNullOrWhiteSpace(critiqueResponse.Content))
+                isGrounded = HallucinationCheckPlugin.IsGrounded(response.Content, contextChunks, minOverlap: 3);
+                
+                // Warn if hallucination detected
+                if (!isGrounded)
                 {
-                    var critique = critiqueResponse.Content.ToLowerInvariant();
-                    if (critique.Contains("not factual") || critique.Contains("not verifiable") || critique.Contains("hallucination") || critique.Contains("i don't know"))
-                    {
-                        response = new ChatMessageContent(AuthorRole.Assistant, "[Warning: This answer may be a hallucination or not verifiable. Fact-check: " + critiqueResponse.Content + "]\n" + response.Content);
-                    }
-                    else
-                    {
-                        response = new ChatMessageContent(AuthorRole.Assistant, "[Fact-check: " + critiqueResponse.Content + "]\n" + response.Content);
-                    }
+                    response = new ChatMessageContent(AuthorRole.Assistant, "[Warning: This answer may not be fully supported by the retrieved documents.]\n" + response.Content);
                 }
-            }
-            else if (!isGrounded)
-            {
-                response = new ChatMessageContent(AuthorRole.Assistant, "[Warning: This answer may not be fully supported by the retrieved documents.]\n" + response.Content);
             }
 
             // Update state with the response

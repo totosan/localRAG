@@ -1,20 +1,21 @@
 {
   "schema": 1,
   "type": "completion",
-  "description": "Classifies a question as beeing answered with RAG or just based on the acutal data in a chat.",
+  "description": "Classifies a question as requiring RAG search or direct answer.",
   "completion": {
-    "max_tokens": 1000,
-    "temperature": 0.2,
-    "top_p": 0.0,
+    "max_tokens": 200,
+    "temperature": 0.1,
+    "top_p": 0.9,
     "presence_penalty": 0.0,
-    "frequency_penalty": 2.0
+    "frequency_penalty": 0.0,
+    "response_format": { "type": "json_object" }
   },
   "input": {
     "parameters": [
       {
         "name": "chat",
-        "description": "A short chat history with the latest user ask, which should be classified into RAG:yes ore RAG:no .",
-        "defaultValue": "yes"
+        "description": "User question to classify for RAG routing decision.",
+        "defaultValue": ""
       }
     ]
   }

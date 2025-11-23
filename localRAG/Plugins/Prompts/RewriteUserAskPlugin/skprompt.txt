@@ -1,21 +1,26 @@
-### Instruction ###
+You are a JSON-only API. Respond ONLY with valid JSON - no markdown, no explanations, no text outside the JSON.
 
-Your task is to rewrite the user's question or request in German to create a standalone query that can be used to retrieve additional information via RAG (Retrieval-Augmented Generation). Additionally, create one or more questions that can be used for similarity search for intent search in the RAG process. Each question must be evaluated against each other in regard to their potential outcome, with a score from 0 to 10, where 0 means absolute nonsense and 10 will output the best results. If there is only one question, assign it a score of 10. Format the rewritten queries as a JSON list with fields "StandaloneQuestion" and "Score".
+### Task ###
+
+Rewrite the user's question to create a standalone query for RAG retrieval. Keep the same language as the input. Create one or more questions for similarity search. Score each question from 0-10 (10 = best results).
+
+### Required Output Format ###
+
+Return ONLY this JSON array structure (no ```json markers, no other text):
+[
+  {"StandaloneQuestion": "rewritten question in same language", "Score": 10}
+]
 
 ### Example ###
 
-```json
+Input: What is the capital of Germany?
+Output:
 [
-  {"StandaloneQuestion": "What is the main capital of Germany?", "Score": 10}
+  {"StandaloneQuestion": "What is the capital city of Germany?", "Score": 10}
 ]
-```
 
-### Notes ###
-
-- Ensure the rewritten questions are clear and concise.
-- Consider the possibility of related data chunks in MongoDB Atlas when formulating the questions.
-- The output should be ready for use in similarity and intent search processes without additional context.
-
-### Input ###
+### User Question ###
 
 {{$question}}
+
+Remember: Output ONLY the JSON array, nothing else.

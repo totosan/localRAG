@@ -5,6 +5,7 @@ using Microsoft.KernelMemory.Handlers;
 using Microsoft.SemanticKernel;
 using System.Text.Json;
 using System.IO;
+using System.Linq;
 
 namespace localRAG.Process.Steps
 {
@@ -38,7 +39,8 @@ namespace localRAG.Process.Steps
             _state = state.State;
             if (_state != null)
             {
-                _state.MemoryConnector = Helpers.GetMemoryConnector<MemoryServerless>(serverless: true, useAzure: true);
+                bool useOllama = Environment.GetEnvironmentVariable("USE_OLLAMA")?.ToLower() == "true";
+                _state.MemoryConnector = Helpers.GetMemoryConnector<MemoryServerless>(serverless: true, useAzure: !useOllama);
 
                 // Create the dictionary required by GenerateTagsHandler
                 Dictionary<string, Dictionary<string, List<string>>> mainTags = new();
@@ -93,26 +95,46 @@ namespace localRAG.Process.Steps
         [KernelFunction(Functions.GetIntentOfAsk)]
         public async Task AskForIntentAsync(KernelProcessStepContext context, SearchData searchData)
         {
-            Console.WriteLine("[DEBUG] Step: LookupKernelmemoriesStep - AskForIntentAsync called");
-
             if (_state?.MemoryConnector == null)
             {
                 _logger.LogError("Memory connector is not initialized");
                 return;
             }
 
+            var standaloneQuestion = searchData.StandaloneQuestions.First().StandaloneQuestion;
+
             var intents = new List<string>();
-            intents.AddRange(await LongtermMemoryHelper.AskForIntentAsync(searchData.StandaloneQuestions.First().StandaloneQuestion, _state.MemoryConnector));
+            intents.AddRange(await LongtermMemoryHelper.AskForIntentAsync(standaloneQuestion, _state.MemoryConnector));
             searchData.Intents = intents;
             _logger.LogInformation("Intents: " + string.Join("\n#", intents));
+            TraceLogger.Log($"[LookupKernelmemoriesStep] Detected intents: {string.Join(", ", intents)}");
+
+            // Extract keyword filters from the user ask for hybrid routing
+            var keywordFilters = KeywordExtractor
+                .ExtractKeywords(standaloneQuestion, maxKeywords: 6)
+                .Concat(KeywordExtractor.ExtractNamedEntities(standaloneQuestion, maxEntities: 4))
+                .Where(k => !string.IsNullOrWhiteSpace(k))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            searchData.KeywordFilters = keywordFilters;
+            if (keywordFilters.Count > 0)
+            {
+                _logger.LogInformation("Keyword filters: " + string.Join(", ", keywordFilters));
+                TraceLogger.Log($"[LookupKernelmemoriesStep] Extracted keywords: {string.Join(", ", keywordFilters)}");
+            }
+            else
+            {
+                _logger.LogInformation("Keyword filters: none extracted");
+                TraceLogger.Log("[LookupKernelmemoriesStep] No keywords extracted");
+            }
+
             await context.EmitEventAsync(new KernelProcessEvent { Id = OutputEvents.IntentsReceived, Data = searchData });
         }
 
         [KernelFunction(Functions.GetMemoryData)]
         public async Task GetFromMemoryAsync(KernelProcessStepContext context, SearchData searchData, Kernel _kernel)
         {
-            Console.WriteLine("[DEBUG] Step: LookupKernelmemoriesStep - GetFromMemoryAsync called");
-
             if (_state?.MemoryConnector == null)
             {
                 _logger.LogError("Memory connector is not initialized");
@@ -122,12 +144,19 @@ namespace localRAG.Process.Steps
             var chatHistory = await _kernel.GetHistory().GetHistoryAsync();
             var userInput = searchData.UserMessage;
             var intents = searchData.Intents;
+            var keywordFilters = searchData.KeywordFilters;
 
             //var longTermMemory = await LongtermMemoryHelper.GetLongTermMemory(_state!.MemoryConnector, searchData.StandaloneQuestions.First().StandaloneQuestion);
-            var longTermMemory = await LongtermMemoryHelper.GetLongTermMemory(_state.MemoryConnector, searchData.StandaloneQuestions.First().StandaloneQuestion, intents: intents);
+            var longTermMemory = await LongtermMemoryHelper.GetLongTermMemory(
+                _state.MemoryConnector, 
+                searchData.StandaloneQuestions.First().StandaloneQuestion, 
+                intents: intents ?? new List<string>(), 
+                keywordFilters: keywordFilters ?? new List<string>());
+            
             _logger.LogInformation($"Long term memory:\n\t{longTermMemory}");
 
-            chatHistory.AddUserMessage($"\n{longTermMemory}");
+            chatHistory.AddUserMessage($"Context:\n{longTermMemory}\n\nPlease answer the question using the context above. When citing sources, include the FilePath and PartitionPath.");
+            searchData.RagPerformed = true;  // Mark that RAG was performed
             await context.EmitEventAsync(new KernelProcessEvent { Id = OutputEvents.MemoryDataReceived, Data = searchData });
         }
     }

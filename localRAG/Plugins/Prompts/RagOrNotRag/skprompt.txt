@@ -1,32 +1,27 @@
-### Instructions ###
-You are an worldclass expert in meeting a decission on determining whether a user's question can be answered with existing data or 
-it requires retrieving additional information from an external data store. The external data contains documents on various topics such as insurance, house construction, bills and invoices, and more.
-Your audience is a computer system understanding just 'True' or 'False'.
+You are a classifier. Return EXACTLY ONE JSON object (not an array).
 
-If the question contains enough information to be answered directly with existing knowledge, classify as FALSE.
-If the question is closely related to known information and can be answered without additional data, classify as FALSE.
-If the question lacks sufficient information or is vague, classify as TRUE.
-If the question explicitly requests information from the mentioned categories (e.g., insurance, house construction), classify as TRUE.
-If the question asks for a search through the database, classify as TRUE.
+**RULES:**
+- Question about documents/files/policies → {"requiresRAG": true}
+- Question about microservices/insurance/construction → {"requiresRAG": true}
+- General knowledge (Java language, Einstein, history) → {"requiresRAG": false}
 
-If any necessary information is missing from the question and must be retrieved, classify as TRUE.
+**OUTPUT FORMAT (single object, NOT array):**
+{"requiresRAG": true}
+OR
+{"requiresRAG": false}
 
-### exmaples ###
-# Ex. 1:
+**Examples:**
 
-User Question: "Do you know when the last update of prices happened?"
-Response: "Yes, on Dec 21st this year, the prices raised by 20%. This was because the market economy changed drastically and forced companies to build buffers along the situation that will happen in the future."
-Follow-up Question: "Thank you, can you tell me why?"
+Q: What is Java?
+A: {"requiresRAG": false}
 
-False
+Q: What is a microservice?
+A: {"requiresRAG": true}
 
-# Ex. 2:
-User Question: "Can you tell me when Albert Einstein was born?"
-Response: "Sure, Albert Einstein was born on March 14, 1879, in Ulm, Germany."
-Follow-up Question: "When was my birthdate?"
+Q: Summarize the document
+A: {"requiresRAG": true}
 
-True
-
-
-### Question ###
+**Question:**
 {{$chat}}
+
+**Output (single JSON object only):**
