@@ -1,42 +1,37 @@
 {
-  "Software Development": [
-    "What are the best programming languages to learn for software development?",
-    "How do I become a software developer?",
-    "What is the software development lifecycle?",
-    "What tools are commonly used in software development?",
-    "What are the differences between front-end and back-end development?",
-    "How do I debug my software application?",
-    "What is an agile development methodology?",
-    "What are some popular frameworks for software development?"
+  "Sports \u0026 Physical Education": [
+    "Welche sportlichen Aktivit\u00E4ten \u00FCbt Thomas Tomow aus?",
+    "Wie wirkt sich Karate auf die Gesundheit aus?",
+    "Was sind die Prinzipien des Karate?",
+    "Welche Wettk\u00E4mpfe gibt es im Karate?",
+    "Wie kann ich mit Karate anfangen?"
   ],
-  "Microservices": [
-    "What are microservices and how do they work?",
-    "How do I transition from monolithic to microservices architecture?",
-    "What are the advantages of using microservices?",
-    "What technologies are best for building microservices?",
-    "How do I manage communication between microservices?",
-    "What are some challenges with microservices architecture?",
-    "How can I secure my microservices?",
-    "What are the best practices for deploying microservices?"
+  "Karate": [
+    "Welche Werte vermittelt Karate?",
+    "Wie ist die Mitgliedschaft im Karate Dojo organisiert?",
+    "Welche Trainingsmethoden nutzt man im Karate?",
+    "Wie oft sollte man Karate trainieren?",
+    "Was sind die Vorteile von Karate f\u00FCr Kinder?"
   ],
-  "Java": [
-    "What is Java and why is it so popular?",
-    "How do I install Java on my computer?",
-    "What are the main features of the Java programming language?",
-    "How do I write a simple Java program?",
-    "What is the difference between JDK, JRE, and JVM?",
-    "What are Java collections and how do they work?",
-    "How do I handle exceptions in Java?",
-    "What are the best libraries and frameworks for Java development?"
+  "Digital Media \u0026 Communications": [
+    "Auf welchen Plattformen ist Thomas Tomow aktiv?",
+    "Wie erstelle ich Inhalte f\u00FCr YouTube?",
+    "Was sind die besten Strategien f\u00FCr Twitter-Interaktionen?",
+    "Wie nutzt man Blogs zur Kommunikation?",
+    "Was sind g\u00E4ngige Themen in YouTube-Videos?"
   ],
-  "Reactive Systems": [
-    "What is a reactive system?",
-    "What are the principles of reactive programming?",
-    "How do I build a reactive application?",
-    "What frameworks support reactive programming?",
-    "What are the challenges of developing reactive systems?",
-    "How do reactive systems handle scalability?",
-    "What is the difference between reactive and imperative programming?",
-    "What are some use cases for reactive systems?"
+  "YouTube Channel": [
+    "Welche Art von Inhalten ver\u00F6ffentlicht Thomas Tomow auf YouTube?",
+    "Wie optimiere ich meinen YouTube-Kanal?",
+    "Wie baue ich eine Community auf YouTube auf?",
+    "Was sind die Trends auf YouTube 2023?",
+    "Wie monetarisiere ich meinen YouTube-Kanal?"
+  ],
+  "Personal Development": [
+    "Wie beeinflusst Karate seine pers\u00F6nliche Entwicklung?",
+    "Welche Bedeutung hat Disziplin in seinem Alltag?",
+    "Wie finde ich die Balance zwischen Arbeit und Freizeit?",
+    "Welche Techniken helfen bei der pers\u00F6nlichen Entwicklung?",
+    "Wie kann man Community Engagement f\u00F6rdern?"
   ]
 }

@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Microsoft.KernelMemory.DataFormats;
 using Microsoft.KernelMemory.Diagnostics;
@@ -15,6 +16,17 @@ public class CustomPdfDecoder : IContentDecoder
     private readonly string? _apiKey;
     private const string PdfMimeType = "application/pdf";
     private const string PlainTextMimeType = "text/plain";
+
+    // German and English stopwords for document normalization
+    private static readonly HashSet<string> Stopwords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "der", "die", "das", "und", "oder", "aber", "in", "auf", "von", "zu", "mit", "für",
+        "ist", "sind", "war", "waren", "wird", "werden", "wurde", "wurden", "hat", "haben",
+        "ein", "eine", "einer", "einem", "einen", "des", "dem", "den", "als", "auch", "an",
+        "bei", "nach", "um", "am", "im", "zum", "zur", "über", "unter", "durch", "vor",
+        "the", "and", "or", "but", "in", "on", "at", "to", "for", "of", "is", "are",
+        "was", "were", "be", "been", "have", "has", "had", "do", "does", "did", "this", "that"
+    };
 
     public CustomPdfDecoder(ILoggerFactory? loggerFactory = null, IHttpClientFactory? httpClientFactory = null)
     {
@@ -170,7 +182,12 @@ public class CustomPdfDecoder : IContentDecoder
                 builder.AppendLine();
             }
 
-            builder.Append(text.Trim());
+            // Apply normalization pipeline before storing
+            var normalizedText = NormalizeText(text);
+            if (!string.IsNullOrWhiteSpace(normalizedText))
+            {
+                builder.Append(normalizedText);
+            }
         }
 
         foreach (var kvp in pages)
@@ -203,8 +220,15 @@ public class CustomPdfDecoder : IContentDecoder
             return false;
         }
 
+        // Apply normalization pipeline
+        var normalizedText = NormalizeText(text);
+        if (string.IsNullOrWhiteSpace(normalizedText))
+        {
+            return false;
+        }
+
         var meta = Chunk.Meta(true, 1);
-        var chunk = new Chunk(text.Trim(), 1, meta);
+        var chunk = new Chunk(normalizedText, 1, meta);
         result.Sections.Add(chunk);
         return true;
     }
@@ -223,5 +247,36 @@ public class CustomPdfDecoder : IContentDecoder
         }
 
         return 1;
+    }
+
+    /// <summary>
+    /// Normalizes text using the standard RAG preprocessing pipeline:
+    /// 1. Convert to lowercase
+    /// 2. Remove punctuation (keep word boundaries)
+    /// 3. Remove stopwords
+    /// 4. Remove extra whitespace
+    /// 5. Trim final result
+    /// </summary>
+    private string NormalizeText(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return string.Empty;
+
+        // Step 1: Convert to lowercase
+        var normalized = text.ToLowerInvariant();
+
+        // Step 2: Remove punctuation but keep word boundaries
+        // Replace punctuation with spaces to preserve word separation
+        normalized = Regex.Replace(normalized, @"[^\w\s]", " ");
+
+        // Step 3: Remove stopwords
+        var words = Regex.Split(normalized, @"\s+")
+            .Where(w => w.Length > 2 && !Stopwords.Contains(w))
+            .ToList();
+
+        // Step 4 & 5: Join words with single space and trim
+        normalized = string.Join(" ", words).Trim();
+
+        return normalized;
     }
 }
