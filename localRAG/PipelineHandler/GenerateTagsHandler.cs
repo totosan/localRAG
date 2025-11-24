@@ -32,6 +32,12 @@ public sealed class GenerateTagsHandler : IPipelineStepHandler
     private readonly string _tocPrompt;
     private Dictionary<string, Dictionary<string, List<string>>> _mainTags;
 
+    private class CategoryContent
+    {
+        public List<string> tags { get; set; } = new();
+        public List<string> questions { get; set; } = new();
+    }
+
     /// <inheritdoc />
     public string StepName { get; }
 
@@ -65,13 +71,21 @@ public sealed class GenerateTagsHandler : IPipelineStepHandler
         --------------
         Analyze the content of the document to identify relevant categories describing the content. 
         Chose a main category and maximum of three subcategories of the main tag for this document that I can use to organize it in a library. 
+        
+        IMPORTANT: For each main category, also generate 3-5 specific questions that can be answered ONLY using the information provided in the content. 
 
         Example Doc:
         "Diese Haus wurde aus verschiedenen Substanzen zusammengesetzt. Es benötigt daher unterschiedliche Materialien zur Instandhaltung. Diese sind zum einen Holz, Mörtel, Fassadenfarbe und diverse Weitere."
 
         Example Choice:
-            "Property & Real Estate": ["Baupläne", "Abnahmeprotokolle"],
-            "Houshold & Utilities": ["Wartungsunterlagen"]
+            "Property & Real Estate": {
+                "tags": ["Baupläne", "Abnahmeprotokolle"],
+                "questions": ["Welche Materialien werden benötigt?", "Woraus besteht das Haus?"]
+            },
+            "Houshold & Utilities": {
+                "tags": ["Wartungsunterlagen"],
+                "questions": ["Was ist bei der Instandhaltung zu beachten?"]
+            }
 
         --------------
         Content: 
@@ -83,15 +97,21 @@ public sealed class GenerateTagsHandler : IPipelineStepHandler
         Take the best fitting categories from the list above, the document can be sorted into! DON'T use categories that are NOT in the list.
         In case you can't find any fitting category, return :
         {
-            "suggestion": ["SUGFGESTION1", "SUGGESTION2", ...]
+            "suggestion": { "tags": ["SUGFGESTION1", "SUGGESTION2"], "questions": [] }
         }
         Just answer in JSON format. Don't NO add descriptions, explanations, analysis results or extra notes. 
 
         Example Output:
         ```json
         {
-            "Property & Real Estate": ["Baupläne", "Abnahmeprotokolle"],
-            "Houshold & Utilities": ["Wartungsunterlagen"]
+            "Property & Real Estate": {
+                "tags": ["Baupläne", "Abnahmeprotokolle"],
+                "questions": ["Welche Materialien werden benötigt?"]
+            },
+            "Houshold & Utilities": {
+                "tags": ["Wartungsunterlagen"],
+                "questions": []
+            }
         }
         ```
         """;
@@ -171,31 +191,31 @@ public sealed class GenerateTagsHandler : IPipelineStepHandler
                                 summary = CleanJsonFromLLMResponse(summary);
                                 
                                 // read the summary, which is a string containing json and convert it to a dictionary
-                                var tags = JsonSerializer.Deserialize<IDictionary<string, List<string?>>>(summary);
+                                var tags = JsonSerializer.Deserialize<Dictionary<string, CategoryContent>>(summary, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
                                 if (tags != null)
                                 {
                                     // join key and values of tags to one list and add it to the tags of the file
-                                    // finacial
-                                    //  - taxes
-                                    //  - income
-                                    // insurance
-                                    //  - health
-                                    //  - car
-                                    //  --> intent: finacial, taxes, income, insurance, health, car
                                     var tagsList = new List<string?>();
                                     foreach (var tag in tags)
                                     {
                                         tagsList.Add(tag.Key);
-                                        if (tag.Value != null)
+                                        
+                                        if (tag.Value.tags != null)
                                         {
-                                            tagsList.AddRange(tag.Value);
+                                            foreach(var t in tag.Value.tags) tagsList.Add(t);
+                                        }
+
+                                        // Store questions specifically for this category
+                                        if (tag.Value.questions != null && tag.Value.questions.Count > 0)
+                                        {
+                                            pipeline.Tags[$"questions_for_{tag.Key}"] = tag.Value.questions.Cast<string?>().ToList();
                                         }
                                     }
                                     pipeline.Tags["intent"] = tagsList;
                                     
                                     // Store extracted keywords separately for demonstration
-                                    pipeline.Tags["keywords"] = keywordTags.Cast<string>().ToList<string>();
+                                    pipeline.Tags["keywords"] = keywordTags.Cast<string?>().ToList();
                                 }
                             }
                             catch (System.Text.Json.JsonException e)
@@ -206,7 +226,7 @@ public sealed class GenerateTagsHandler : IPipelineStepHandler
                         else
                         {
                             // If LLM categorization fails, at least save the keywords
-                            pipeline.Tags["keywords"] = keywordTags.Cast<string>().ToList<string>();
+                            pipeline.Tags["keywords"] = keywordTags.Cast<string?>().ToList();
                             this._log.LogWarning("LLM categorization failed, using keywords only for {0}", file.Name);
                         }
 

@@ -290,11 +290,6 @@ namespace localRAG
                 var listOfTags = new Dictionary<string, List<string>>();
                 foreach (var tag in tags.Where(t => !string.IsNullOrWhiteSpace(t.Key)))
                 {
-                    if (!listOfTags.ContainsKey(tag.Key!))
-                    {
-                        listOfTags[tag.Key!] = new List<string>();
-                    }
-
                     if (tag.Value != null)
                     {
                         foreach (var value in tag.Value.Where(v => !string.IsNullOrWhiteSpace(v)))
@@ -307,13 +302,77 @@ namespace localRAG
                     }
                 }
 
-                var result = await kernel.InvokeAsync<string>(prompts["IntentsPlugin"], new() { ["input"] = JsonSerializer.Serialize(listOfTags) });
-                if (!string.IsNullOrWhiteSpace(result))
+                if (listOfTags.Count == 0)
                 {
-                    var intentListWithQuestions = SanitizePluginOutput(result);
+                    Console.WriteLine("No tags collected from documents. Skipping intent generation.");
+                    return;
+                }
+
+                // Check if we have pre-generated questions from the documents
+                var extractedQuestions = new Dictionary<string, List<string>>();
+                foreach (var tag in tags)
+                {
+                    if (tag.Key.StartsWith("questions_for_"))
+                    {
+                        var category = tag.Key.Substring("questions_for_".Length);
+                        if (!extractedQuestions.ContainsKey(category))
+                        {
+                            extractedQuestions[category] = new List<string>();
+                        }
+                        
+                        if (tag.Value != null)
+                        {
+                            foreach (var q in tag.Value.Where(v => !string.IsNullOrWhiteSpace(v)))
+                            {
+                                if (!extractedQuestions[category].Contains(q!))
+                                {
+                                    extractedQuestions[category].Add(q!);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                string? intentListWithQuestions = null;
+                if (extractedQuestions.Count > 0)
+                {
+                    Console.WriteLine($"Found {extractedQuestions.Count} categories with document-based questions. Using them directly.");
+                    // Use the extracted questions directly, skipping the IntentsPlugin generation step
+                    // We might want to limit the number of questions per category if there are too many
+                    var finalCollection = new Dictionary<string, List<string>>();
+                    foreach(var kvp in extractedQuestions)
+                    {
+                        // Take top 8 questions to match the plugin's behavior
+                        finalCollection[kvp.Key] = kvp.Value.Take(8).ToList();
+                    }
+                    intentListWithQuestions = JsonSerializer.Serialize(finalCollection, new JsonSerializerOptions { WriteIndented = true });
+                }
+                // Fallback to original behavior if no questions were extracted
+                if (string.IsNullOrEmpty(intentListWithQuestions))
+                {
+                    var result = await kernel.InvokeAsync<string>(prompts["IntentsPlugin"], new() { ["input"] = JsonSerializer.Serialize(listOfTags) });
+                    if (!string.IsNullOrWhiteSpace(result))
+                    {
+                        intentListWithQuestions = SanitizePluginOutput(result);
+                        // Try to repair common JSON errors (like missing closing brace)
+                        if (!intentListWithQuestions.TrimEnd().EndsWith("}"))
+                        {
+                            intentListWithQuestions += "}";
+                        }
+                    }
+                }
+
+                if (!string.IsNullOrWhiteSpace(intentListWithQuestions))
+                {
                     try
                     {
-                        var tagCollection = JsonSerializer.Deserialize<Dictionary<string, List<string?>>>(intentListWithQuestions);
+                        var options = new JsonSerializerOptions
+                        {
+                            AllowTrailingCommas = true,
+                            ReadCommentHandling = JsonCommentHandling.Skip,
+                            PropertyNameCaseInsensitive = true
+                        };
+                        var tagCollection = JsonSerializer.Deserialize<Dictionary<string, List<string?>>>(intentListWithQuestions, options);
                         if (tagCollection != null)
                         {
                             Console.WriteLine($"Generated {tagCollection.Count} tag collections with questions");
@@ -326,6 +385,13 @@ namespace localRAG
                             : intentListWithQuestions;
                         TraceLogger.Log($"[ImportDocumentsAsync] Ignoring non-JSON IntentsPlugin output: {preview}");
                         Console.WriteLine($"Warning: IntentsPlugin returned invalid JSON ({ex.Message}). Skipping intent question generation.");
+                        
+                        try 
+                        {
+                            File.WriteAllText("debug_output.txt", intentListWithQuestions);
+                            Console.WriteLine("Full invalid JSON written to debug_output.txt");
+                        }
+                        catch { /* ignore write error */ }
                     }
                 }
             }

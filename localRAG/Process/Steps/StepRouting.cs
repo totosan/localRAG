@@ -47,6 +47,14 @@ namespace localRAG.Process.Steps
             bool rag_search;
             {
                 var message = Helpers.ChatHistoryToString(history, searchData.UserMessage);
+                
+                // Append the best rewritten question to help the classifier understand context/intent
+                var bestQuestion = searchData.StandaloneQuestions?.FirstOrDefault();
+                if (bestQuestion != null)
+                {
+                    message += $"\n\n[System Note] Most likely interpretation: {bestQuestion.StandaloneQuestion}";
+                }
+
                 var userMessageLower = searchData.UserMessage.ToLowerInvariant();
                 
                 // Strong heuristic: if message explicitly mentions documents or stored content, force RAG
@@ -56,7 +64,14 @@ namespace localRAG.Process.Steps
                     || userMessageLower.Contains("policy")
                     || userMessageLower.Contains("contract")
                     || userMessageLower.Contains("invoice")
-                    || userMessageLower.Contains("imported-documents");
+                    || userMessageLower.Contains("dossier")
+                    || userMessageLower.Contains("detail")
+                    || userMessageLower.Contains("imported-documents")
+                    // Heuristics for follow-up questions
+                    || userMessageLower.StartsWith("what about")
+                    || userMessageLower.StartsWith("tell me more")
+                    || userMessageLower.Contains("more details")
+                    || userMessageLower.Contains("continue");
 
                 // invoke plugin to decide if the message should go to RAG or not
                 var ragAsk = await kernel35.InvokeAsync<string>(ragOrNotRagPrompt, new() { ["chat"] = message });

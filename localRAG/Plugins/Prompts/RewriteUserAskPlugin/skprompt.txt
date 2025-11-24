@@ -2,7 +2,11 @@ You are a JSON-only API. Respond ONLY with valid JSON - no markdown, no explanat
 
 ### Task ###
 
-Rewrite the user's question to create a standalone query for RAG retrieval. Keep the same language as the input. Create one or more questions for similarity search. Score each question from 0-10 (10 = best results).
+Rewrite the user's question to create a standalone query for RAG retrieval. 
+- Use the provided chat history to resolve references (e.g., "him", "it", "that").
+- Keep the same language as the input.
+- Create one or more questions for similarity search.
+- Score each question from 0-10 (10 = best results).
 
 ### Required Output Format ###
 
@@ -13,13 +17,18 @@ Return ONLY this JSON array structure (no ```json markers, no other text):
 
 ### Example ###
 
-Input: What is the capital of Germany?
+History:
+User: Who is Thomas?
+Assistant: Thomas is a developer.
+
+Input: Tell me more about him.
 Output:
 [
-  {"StandaloneQuestion": "What is the capital city of Germany?", "Score": 10}
+  {"StandaloneQuestion": "Tell me more about Thomas the developer", "Score": 10},
+  {"StandaloneQuestion": "What are Thomas's skills?", "Score": 8}
 ]
 
-### User Question ###
+### Conversation ###
 
 {{$question}}
 

@@ -26,6 +26,14 @@ namespace localRAG.Process.Steps
 
             var chatHist = await _kernel.GetHistory().GetHistoryAsync();
             chatHist.Add(new(AuthorRole.User, userMessage));
+
+            // If NO RAG was performed, we need to tell the model it's okay to answer from general knowledge
+            // otherwise the strict system prompt might make it refuse to answer.
+            if (!searchData.RagPerformed)
+            {
+                chatHist.Add(new(AuthorRole.System, "For this question, you do NOT need to use document memory. Please answer from your general knowledge."));
+            }
+
             IChatCompletionService chatService = _kernel.Services.GetRequiredService<IChatCompletionService>();
             response = await chatService.GetChatMessageContentAsync(chatHist).ConfigureAwait(false);
             
@@ -50,12 +58,45 @@ namespace localRAG.Process.Steps
             
             if (performHallucinationCheck)
             {
-                isGrounded = HallucinationCheckPlugin.IsGrounded(response.Content, contextChunks, minOverlap: 3);
+                // Extract context from the last user message which contains the RAG context
+                var lastUserMessage = chatHist.LastOrDefault(m => m.Role == AuthorRole.User)?.Content ?? "";
+                var contextStart = lastUserMessage.IndexOf("Context:\n");
                 
-                // Warn if hallucination detected
-                if (!isGrounded)
+                if (contextStart >= 0)
                 {
-                    response = new ChatMessageContent(AuthorRole.Assistant, "[Warning: This answer may not be fully supported by the retrieved documents.]\n" + response.Content);
+                    // Extract just the context part, ignoring the user's question at the end
+                    var contextContent = lastUserMessage.Substring(contextStart);
+                    
+                    // Use LLM-based hallucination check for better accuracy
+                    var kernel35 = Helpers.GetSemanticKernel(weakGpt: false);
+                    var path = Path.Combine(Directory.GetCurrentDirectory(), "Plugins/Prompts");
+                    var promptPlugins = kernel35.ImportPluginFromPromptDirectory(path);
+                    
+                    try 
+                    {
+                        var checkResult = await kernel35.InvokeAsync<string>(
+                            promptPlugins["HalucinationCheckPlugin"], 
+                            new() { ["question"] = contextContent, ["answer"] = response.Content }
+                        );
+                        
+                        // Check if the result contains "YES" (grounded) or "NO" (hallucination)
+                        // The prompt asks for "Score: YES" or "Score: NO"
+                        isGrounded = checkResult != null && checkResult.Contains("Score: YES", StringComparison.OrdinalIgnoreCase);
+                        
+                        TraceLogger.Log($"[HallucinationCheck] LLM Result: {checkResult?.Substring(0, Math.Min(50, checkResult?.Length ?? 0))}... Grounded: {isGrounded}");
+                    }
+                    catch (Exception ex)
+                    {
+                        TraceLogger.Log($"[HallucinationCheck] LLM check failed: {ex.Message}. Fallback to keyword overlap.");
+                        // Fallback to simple keyword overlap
+                        isGrounded = HallucinationCheckPlugin.IsGrounded(response.Content, new List<string> { contextContent }, minOverlap: 3);
+                    }
+                    
+                    // Warn if hallucination detected
+                    if (!isGrounded)
+                    {
+                        response = new ChatMessageContent(AuthorRole.Assistant, "[Warning: This answer is not based on the retrieved documents.]\n" + response.Content);
+                    }
                 }
             }
 

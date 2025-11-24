@@ -2,7 +2,9 @@ You are a classifier. Return EXACTLY ONE JSON object (not an array).
 
 **RULES:**
 - Question about documents/files/policies → {"requiresRAG": true}
+- Question about specific people, names, or entities → {"requiresRAG": true}
 - Question about microservices/insurance/construction → {"requiresRAG": true}
+- Follow-up questions referring to previous context (e.g., "tell me more", "what about him?") → {"requiresRAG": true}
 - General knowledge (Java language, Einstein, history) → {"requiresRAG": false}
 
 **OUTPUT FORMAT (single object, NOT array):**
@@ -12,6 +14,9 @@ OR
 
 **Examples:**
 
+Q: Who is Thomas Tomow?
+A: {"requiresRAG": true}
+
 Q: What is Java?
 A: {"requiresRAG": false}
 
@@ -20,6 +25,13 @@ A: {"requiresRAG": true}
 
 Q: Summarize the document
 A: {"requiresRAG": true}
+
+Q: Tell me more about him.
+A: {"requiresRAG": true}
+
+Q: What is Karate?
+[System Note] Most likely interpretation: What is Karate?
+A: {"requiresRAG": false}
 
 **Question:**
 {{$chat}}

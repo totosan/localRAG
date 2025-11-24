@@ -40,7 +40,7 @@ namespace localRAG.Process.Steps
 
             List<UserAsk> rewrittenQuestions = new();
             // Only rewrite the last user question (current userInput), not the entire chat history
-            var messages = userInput;
+            var messages = Helpers.ChatHistoryToString(chatHist, userInput);
             
             // Create execution settings with JSON format enforcement
             // For Ollama via OpenAI connector: use "json_object" as the type

@@ -138,12 +138,33 @@ namespace localRAG.Utilities
                             : $"[green]Completed[/] {fileName}";
                         processedDocuments++;
 
-                        tags = await GetTagsFromDocumentById(memoryConnector, file, fileId);
+                        var newTags = await GetTagsFromDocumentById(memoryConnector, file, fileId);
+                        foreach (var kvp in newTags)
+                        {
+                            if (tags.ContainsKey(kvp.Key))
+                            {
+                                if (tags[kvp.Key] == null) tags[kvp.Key] = new List<string?>();
+                                if (kvp.Value != null)
+                                {
+                                    foreach (var val in kvp.Value)
+                                    {
+                                        if (!tags[kvp.Key]!.Contains(val))
+                                        {
+                                            tags[kvp.Key]!.Add(val);
+                                        }
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                tags.Add(kvp.Key, kvp.Value ?? new List<string?>());
+                            }
+                        }
 
                         var fileDisplay = Markup.Escape(file ?? "unknown");
-                        var tagDisplay = tags.Count == 0
+                        var tagDisplay = newTags.Count == 0
                             ? "[grey]none[/]"
-                            : string.Join(", ", tags.Select(kvp =>
+                            : string.Join(", ", newTags.Select(kvp =>
                                 $"{Markup.Escape(kvp.Key)}: {Markup.Escape(string.Join("/", kvp.Value ?? []))}"));
 
                         AnsiConsole.MarkupLine($"[dim]Tags for[/] {fileDisplay}: {tagDisplay}");
