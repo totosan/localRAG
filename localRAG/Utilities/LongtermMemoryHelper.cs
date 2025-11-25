@@ -18,6 +18,15 @@ using Spectre.Console;
 
 namespace localRAG.Utilities
 {
+    /// <summary>
+    /// 🎤 SLIDES 5, 7, 8, 9: Core RAG retrieval pipeline
+    /// 
+    /// This class demonstrates multiple RAG concepts:
+    /// - Slide 5: Chunking strategy with adjacent chunks (overlap)
+    /// - Slide 7: Dense retriever (vector search)
+    /// - Slide 8: Hybrid retrieval (semantic + keyword filtering)
+    /// - Slide 9: Reranking application points
+    /// </summary>
     public class LongtermMemoryHelper
     {
         private static readonly IReadOnlyList<string> PipelineStepOrder = new[]
@@ -405,13 +414,18 @@ namespace localRAG.Utilities
                     //return partCollection.SelectMany(p => p.Values).Aggregate("", (sum, chunk) => sum + chunk.Text + "\n").Trim();
                     //return memories.Results.SelectMany(m => m.Partitions).Aggregate("", (sum, chunk) => sum + chunk.Text + "\n").Trim();
                     
+                    #region Slide 9: Reranking Application Point #1
+                    
                     // RERANKING: Apply semantic reranking to improve result relevance
+                    // This is where Slide 9 comes alive - show the reranking in action!
                     if (documents.Count > 1)
                     {
                         bool useOllama = Environment.GetEnvironmentVariable("USE_OLLAMA")?.ToLower() == "true";
                         var embeddingGenerator = Helpers.GetEmbeddingGenerator(useAzure: !useOllama);
                         documents = await Reranker.RerankAsync(query, documents, embeddingGenerator, topK: -1);
                     }
+                    
+                    #endregion
                     
                     return JsonSerializer.Serialize(documents);
                 }
@@ -438,6 +452,8 @@ namespace localRAG.Utilities
                 }
             }
             
+            #region Slide 9: Reranking Application Point #2
+            
             // RERANKING: Also apply reranking when using AskAsync
             if (documents.Count > 1)
             {
@@ -445,6 +461,8 @@ namespace localRAG.Utilities
                 var embeddingGenerator = Helpers.GetEmbeddingGenerator(useAzure: !useOllama);
                 documents = await Reranker.RerankAsync(query, documents, embeddingGenerator, topK: -1);
             }
+            
+            #endregion
             
             return JsonSerializer.Serialize(documents);
         }

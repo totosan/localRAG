@@ -1,37 +1,72 @@
 {
-  "Sports \u0026 Physical Education": [
-    "Welche sportlichen Aktivit\u00E4ten \u00FCbt Thomas Tomow aus?",
-    "Wie wirkt sich Karate auf die Gesundheit aus?",
-    "Was sind die Prinzipien des Karate?",
-    "Welche Wettk\u00E4mpfe gibt es im Karate?",
-    "Wie kann ich mit Karate anfangen?"
+  "Thomas Tomow": [
+    "Who is Thomas Tomow?",
+    "What are Thomas Tomow\u0027s professional background?",
+    "Which projects is Thomas Tomow involved in?",
+    "What are the personal interests of Thomas Tomow?",
+    "How can I contact Thomas Tomow?"
   ],
-  "Karate": [
-    "Welche Werte vermittelt Karate?",
-    "Wie ist die Mitgliedschaft im Karate Dojo organisiert?",
-    "Welche Trainingsmethoden nutzt man im Karate?",
-    "Wie oft sollte man Karate trainieren?",
-    "Was sind die Vorteile von Karate f\u00FCr Kinder?"
+  "Personal \u0026 Lifestyle": [
+    "What sports does Thomas Tomow play?",
+    "What hobbies does Thomas Tomow enjoy?",
+    "What is Thomas Tomow\u0027s favorite leisure activity?",
+    "Which outdoor activities does Thomas Tomow participate in?",
+    "What are Thomas Tomow\u0027s personal development goals?"
   ],
-  "Digital Media \u0026 Communications": [
-    "Auf welchen Plattformen ist Thomas Tomow aktiv?",
-    "Wie erstelle ich Inhalte f\u00FCr YouTube?",
-    "Was sind die besten Strategien f\u00FCr Twitter-Interaktionen?",
-    "Wie nutzt man Blogs zur Kommunikation?",
-    "Was sind g\u00E4ngige Themen in YouTube-Videos?"
+  "Technology \u0026 Computing": [
+    "Which programming languages does Thomas Tomow use?",
+    "What technologies are used in Thomas Tomow\u0027s projects?",
+    "How does Thomas Tomow approach software architecture?",
+    "What is Thomas Tomow\u0027s experience with DevOps?",
+    "Which frameworks does Thomas Tomow favor?"
   ],
-  "YouTube Channel": [
-    "Welche Art von Inhalten ver\u00F6ffentlicht Thomas Tomow auf YouTube?",
-    "Wie optimiere ich meinen YouTube-Kanal?",
-    "Wie baue ich eine Community auf YouTube auf?",
-    "Was sind die Trends auf YouTube 2023?",
-    "Wie monetarisiere ich meinen YouTube-Kanal?"
+  "IoT": [
+    "How is IoT used in Thomas Tomow\u0027s hobbies?",
+    "What IoT devices does Thomas Tomow own?",
+    "What role does IoT play in Thomas Tomow\u0027s projects?",
+    "How does Thomas Tomow integrate IoT into his workflow?",
+    "What IoT platforms does Thomas Tomow prefer?"
   ],
-  "Personal Development": [
-    "Wie beeinflusst Karate seine pers\u00F6nliche Entwicklung?",
-    "Welche Bedeutung hat Disziplin in seinem Alltag?",
-    "Wie finde ich die Balance zwischen Arbeit und Freizeit?",
-    "Welche Techniken helfen bei der pers\u00F6nlichen Entwicklung?",
-    "Wie kann man Community Engagement f\u00F6rdern?"
+  "Cloud Technologies": [
+    "Which cloud platforms does Thomas Tomow use?",
+    "What services are deployed by Thomas Tomow in the cloud?",
+    "How does Thomas Tomow implement continuous delivery?",
+    "Which cloud provider does Thomas Tomow trust?",
+    "Which cloud services does Thomas Tomow manage?"
+  ],
+  "Microsoft .NET": [
+    "Which .NET frameworks does Thomas Tomow develop with?",
+    "What .NET versions does Thomas Tomow support?",
+    "How does Thomas Tomow utilize Entity Framework?",
+    "What is Thomas Tomow\u0027s experience with ASP.NET?",
+    "Which .NET libraries does Thomas Tomow use in his projects?"
+  ],
+  "Kubernetes": [
+    "How does Thomas Tomow configure Kubernetes clusters?",
+    "What Kubernetes operators does Thomas Tomow use?",
+    "Which Helm charts does Thomas Tomow deploy?",
+    "How does Thomas Tomow monitor Kubernetes?",
+    "What ingress controllers does Thomas Tomow work with?"
+  ],
+  "Docker": [
+    "What Docker images does Thomas Tomow build?",
+    "How does Thomas Tomow manage Docker containers?",
+    "What is Thomas Tomow\u0027s approach to Dockerfile optimization?",
+    "Which Docker Compose setups does Thomas Tomow deploy?",
+    "What container registries does Thomas Tomow use?"
+  ],
+  "Microservice": [
+    "What microservice patterns does Thomas Tomow apply?",
+    "How does Thomas Tomow manage service discovery?",
+    "What APIs does Thomas Tomow expose as microservices?",
+    "How does Thomas Tomow handle communication between microservices?",
+    "What is Thomas Tomow\u0027s approach to scalability in microservices?"
+  ],
+  "Xebia": [
+    "What role does Thomas Tomow have at Xebia?",
+    "What projects at Xebia is Thomas Tomow involved in?",
+    "How does Thomas Tomow contribute to Xebia\u0027s community?",
+    "What technologies does Thomas Tomow implement at Xebia?",
+    "What is Thomas Tomow\u0027s tenure at Xebia?"
   ]
 }

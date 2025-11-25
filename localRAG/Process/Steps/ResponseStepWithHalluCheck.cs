@@ -10,6 +10,22 @@ using Microsoft.SemanticKernel.ChatCompletion;
 namespace localRAG.Process.Steps
 {
 #pragma warning disable SKEXP0080 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+    
+    /// <summary>
+    /// 🎤 SLIDE 10: Halluzinations-Prävention
+    /// 
+    /// Implements LLM-based hallucination detection to ensure generated answers
+    /// are grounded in retrieved context, not fabricated by the model.
+    /// 
+    /// Demo Breakpoint: Line 84 (check LLM score result)
+    /// Watch Variables: checkResult, isGrounded, contextContent
+    /// 
+    /// Talking Points:
+    /// - "We use a separate GPT-3.5 model as a 'fact-checker'"
+    /// - "Compares generated answer against retrieved context"
+    /// - "Scores YES/NO - if NO, we flag the response with a warning"
+    /// - "Fallback to simple keyword overlap for robustness"
+    /// </summary>
     public class ResponseStepWithHalluCheck : KernelProcessStep<ResponseState>
     {
         public static class Functions
@@ -56,6 +72,8 @@ namespace localRAG.Process.Steps
             bool performHallucinationCheck = searchData.RagPerformed;
             bool isGrounded = true;  // Default to grounded if no RAG
             
+            #region Slide 10: Hallucination Check Logic
+            
             if (performHallucinationCheck)
             {
                 // Extract context from the last user message which contains the RAG context
@@ -99,6 +117,8 @@ namespace localRAG.Process.Steps
                     }
                 }
             }
+            
+            #endregion
 
             // Update state with the response
             chatHist.Add(response);

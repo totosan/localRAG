@@ -5,9 +5,22 @@ using System.Text.RegularExpressions;
 
 namespace localRAG.Utilities
 {
+    #region Slide 6: Keyword-Extraktion
+    
     /// <summary>
+    /// 🎤 SLIDE 6: Keyword-Extraktion (4 Methods)
+    /// 
     /// Simple keyword extraction using TF-IDF-inspired approach and phrase extraction (RAKE-like)
     /// Suitable for demonstration purposes in RAG presentations
+    /// 
+    /// Methods:
+    /// 1. TF-IDF Frequency Analysis (Lines 80-95)
+    /// 2. Technical Term Detection (Lines 97-105)
+    /// 3. RAKE Phrase Extraction (Lines 115-150)
+    /// 4. Named Entity Recognition (Lines 154-178)
+    /// 
+    /// Demo Breakpoint: Line 54 (after ExtractKeywords returns)
+    /// Watch Variables: extractedKeywords, namedEntities
     /// </summary>
     public static class KeywordExtractor
     {
@@ -58,8 +71,11 @@ namespace localRAG.Utilities
             return keywords.Take(maxKeywords).ToList();
         }
 
+        #region 6.1: Method 1 - TF-IDF Frequency Analysis
+        
         /// <summary>
         /// Extract frequently occurring words (TF-inspired, without IDF since we process per-chunk)
+        /// Demonstrates: Frequency counting, stopword filtering, deterministic ordering
         /// </summary>
         private static List<string> ExtractFrequentWords(string text, int topN)
         {
@@ -78,9 +94,14 @@ namespace localRAG.Utilities
 
             return wordFrequency;
         }
-
+        
+        #endregion
+        
+        #region 6.2: Method 2 - Technical Term Detection
+        
         /// <summary>
         /// Identify technical terms from a predefined list
+        /// Demonstrates: Domain-specific vocabulary matching
         /// </summary>
         private static List<string> ExtractTechnicalTerms(string text)
         {
@@ -89,9 +110,14 @@ namespace localRAG.Utilities
                 .Where(term => lowerText.Contains(term))
                 .ToList();
         }
-
+        
+        #endregion
+        
+        #region 6.3: Method 3 - RAKE Phrase Extraction
+        
         /// <summary>
         /// Extract key phrases using RAKE-inspired approach (noun phrases between stopwords)
+        /// Demonstrates: Multi-word phrase detection, phrase scoring
         /// </summary>
         private static List<string> ExtractKeyPhrases(string text, int topN)
         {
@@ -148,6 +174,10 @@ namespace localRAG.Utilities
 
             return phraseScores;
         }
+        
+        #endregion
+        
+        #region 6.4: Method 4 - Named Entity Recognition
 
         /// <summary>
         /// Extract named entities (simplified - looks for capitalized word sequences)
@@ -173,5 +203,9 @@ namespace localRAG.Utilities
 
             return entities;
         }
+        
+        #endregion // 6.4: Named Entity Recognition
+        
+        #endregion // Slide 6: Keyword-Extraktion
     }
 }

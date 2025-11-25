@@ -9,16 +9,32 @@ using Microsoft.KernelMemory.AI;
 
 namespace localRAG.Utilities
 {
+    #region Slide 9: Reranking Implementation
+    
     /// <summary>
+    /// 🎤 SLIDE 9: Reranking - Improving Retrieval Precision
+    /// 
     /// Simple but effective reranker for RAG that computes semantic similarity scores
     /// between the user query and each retrieved chunk, then reorders by relevance.
     /// Perfect for demonstrating reranking in a talk!
+    /// 
+    /// Demo Breakpoint: Line 69 (inside reranking loop)
+    /// Watch Variables: similarity, blendedScore, rerankedDocs
+    /// 
+    /// Key Concepts:
+    /// - Two-stage retrieval: Fast recall (vector DB) → Precise rerank (similarity)
+    /// - Blended scoring: 70% rerank + 30% original
+    /// - Visible console logs show reordering effect
     /// </summary>
     public static class Reranker
     {
+        #region 9.1: Semantic Reranking (Embedding-based)
+        
         /// <summary>
         /// Reranks documents based on semantic similarity to the query.
         /// Uses embeddings to compute cosine similarity for accurate relevance scoring.
+        /// 
+        /// This is the MAIN reranking method - show this during your demo!
         /// </summary>
         /// <param name="query">The user's search query</param>
         /// <param name="documents">List of documents to rerank</param>
@@ -106,9 +122,15 @@ namespace localRAG.Utilities
             }
         }
         
+        #endregion
+        
+        #region 9.2: Keyword-based Reranking (Fallback)
+        
         /// <summary>
         /// Simpler keyword-based reranker that doesn't require embeddings.
         /// Good fallback or for demonstrating different reranking strategies.
+        /// 
+        /// Show this as alternative approach: keyword overlap vs semantic similarity
         /// </summary>
         /// <param name="query">The user's search query</param>
         /// <param name="documents">List of documents to rerank</param>
@@ -154,9 +176,15 @@ namespace localRAG.Utilities
             return scored.Take(resultCount).ToList();
         }
         
+        #endregion
+        
+        #region 9.3: Cosine Similarity Helper
+        
         /// <summary>
         /// Computes cosine similarity between two embedding vectors.
-        /// Returns a value between -1 and 1, where 1 means identical and 0 means orthogonal.
+        /// Returns a value between -1 and 1, where 1 means identical direction.
+        /// 
+        /// Core math behind semantic similarity - simple but powerful!
         /// </summary>
         private static float CosineSimilarity(ReadOnlyMemory<float> vectorA, ReadOnlyMemory<float> vectorB)
         {
@@ -188,5 +216,9 @@ namespace localRAG.Utilities
             
             return dotProduct / magnitude;
         }
+        
+        #endregion // 9.3: Cosine Similarity Helper
+        
+        #endregion // Slide 9: Reranking Implementation
     }
 }

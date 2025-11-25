@@ -17,6 +17,8 @@ public class CustomPdfDecoder : IContentDecoder
     private const string PdfMimeType = "application/pdf";
     private const string PlainTextMimeType = "text/plain";
 
+    #region Slide 4: Dokumenten-Normalisierung
+    
     // German and English stopwords for document normalization
     private static readonly HashSet<string> Stopwords = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -250,12 +252,24 @@ public class CustomPdfDecoder : IContentDecoder
     }
 
     /// <summary>
-    /// Normalizes text using the standard RAG preprocessing pipeline:
-    /// 1. Convert to lowercase
-    /// 2. Remove punctuation (keep word boundaries)
-    /// 3. Remove stopwords
-    /// 4. Remove extra whitespace
-    /// 5. Trim final result
+    /// 🎤 SLIDE 4: Dokumenten-Normalisierung
+    /// 
+    /// Complete normalization pipeline demonstrating:
+    /// 1. Convert to lowercase (Line 247)
+    /// 2. Remove punctuation - keep word boundaries (Line 250)
+    /// 3. Remove stopwords - German + English (Lines 253-256)
+    /// 4. Remove extra whitespace (Line 259)
+    /// 5. Trim final result (Line 259)
+    /// 
+    /// Demo Breakpoint: Line 247
+    /// Expected Input: "Das ist ein Beispiel-Text! Mit Satzzeichen."
+    /// Expected Output: "beispiel text satzzeichen"
+    /// 
+    /// Talking Points:
+    /// - Pure C# implementation, no external NLP libraries
+    /// - 40+ stopwords (bilingual support)
+    /// - Index-time normalization (happens once during import)
+    /// - Standard RAG best practice
     /// </summary>
     private string NormalizeText(string text)
     {
@@ -279,4 +293,6 @@ public class CustomPdfDecoder : IContentDecoder
 
         return normalized;
     }
+    
+    #endregion
 }
