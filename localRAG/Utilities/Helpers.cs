@@ -173,6 +173,42 @@ namespace localRAG
                 .Build();
             }
         }
+        
+        /// <summary>
+        /// Gets an embedding generator for reranking purposes.
+        /// </summary>
+        /// <param name="useAzure">Whether to use Azure OpenAI or Ollama</param>
+        /// <returns>Text embedding generator instance</returns>
+        public static ITextEmbeddingGenerator GetEmbeddingGenerator(bool useAzure = false)
+        {
+            if (useAzure)
+            {
+                var config = new AzureOpenAIConfig
+                {
+                    APIType = AzureOpenAIConfig.APITypes.EmbeddingGeneration,
+                    Deployment = EnvVar("AZURE_OPENAI_EMBEDDING_DEPLOYMENT"),
+                    Endpoint = EnvVar("AZURE_OPENAI_ENDPOINT"),
+                    APIKey = EnvVar("AZURE_OPENAI_API_KEY"),
+                    Auth = AzureOpenAIConfig.AuthTypes.APIKey
+                };
+                
+#pragma warning disable KMEXP01 // Type is for evaluation purposes only
+                return new Microsoft.KernelMemory.AI.AzureOpenAI.AzureOpenAITextEmbeddingGenerator(config, textTokenizer: new CL100KTokenizer());
+#pragma warning restore KMEXP01
+            }
+            else
+            {
+                var config = new OllamaConfig
+                {
+                    Endpoint = EnvVar("OLLAMA_ENDPOINT"),
+                    TextModel = new OllamaModelConfig(EnvVar("OLLAMA_TEXT")),
+                    EmbeddingModel = new OllamaModelConfig(EnvVar("OLLAMA_EMBEDDING"))
+                };
+                
+                return new Microsoft.KernelMemory.AI.Ollama.OllamaTextEmbeddingGenerator(config, textTokenizer: new CL100KTokenizer());
+            }
+        }
+        
         public static string HashThis(string value)
         {
             return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToUpperInvariant();

@@ -404,6 +404,15 @@ namespace localRAG.Utilities
 
                     //return partCollection.SelectMany(p => p.Values).Aggregate("", (sum, chunk) => sum + chunk.Text + "\n").Trim();
                     //return memories.Results.SelectMany(m => m.Partitions).Aggregate("", (sum, chunk) => sum + chunk.Text + "\n").Trim();
+                    
+                    // RERANKING: Apply semantic reranking to improve result relevance
+                    if (documents.Count > 1)
+                    {
+                        bool useOllama = Environment.GetEnvironmentVariable("USE_OLLAMA")?.ToLower() == "true";
+                        var embeddingGenerator = Helpers.GetEmbeddingGenerator(useAzure: !useOllama);
+                        documents = await Reranker.RerankAsync(query, documents, embeddingGenerator, topK: -1);
+                    }
+                    
                     return JsonSerializer.Serialize(documents);
                 }
             }
@@ -428,6 +437,15 @@ namespace localRAG.Utilities
                     documents.Add(docsimple);
                 }
             }
+            
+            // RERANKING: Also apply reranking when using AskAsync
+            if (documents.Count > 1)
+            {
+                bool useOllama = Environment.GetEnvironmentVariable("USE_OLLAMA")?.ToLower() == "true";
+                var embeddingGenerator = Helpers.GetEmbeddingGenerator(useAzure: !useOllama);
+                documents = await Reranker.RerankAsync(query, documents, embeddingGenerator, topK: -1);
+            }
+            
             return JsonSerializer.Serialize(documents);
         }
 
