@@ -4,13 +4,13 @@
 
 | Slide | Topic | Primary File | Lines | Breakpoint | Region |
 |-------|-------|-------------|--------|------------|--------|
-| 4 | Normalisierung | [CustomPdfDecoder.cs](Decoder/CustomPdfDecoder.cs#L240-L266) | 240-266 | 247 | ✅ |
-| 5 | Chunking | [LongtermMemoryHelper.cs](Utilities/LongtermMemoryHelper.cs#L475-L530) | 475-530 | 485 | ✅ |
-| 6 | Keyword-Extraktion | [KeywordExtractor.cs](Utilities/KeywordExtractor.cs#L40-L178) | 40-178 | 54 | ✅ |
-| 7 | Dense Retriever | [LongtermMemoryHelper.cs](Utilities/LongtermMemoryHelper.cs#L340-L370) | 340-370 | 350 | ✅ |
+| 4 | Normalisierung | [CustomPdfDecoder.cs](Decoder/CustomPdfDecoder.cs#L254-L294) | 254-294 | 279 | ✅ |
+| 5 | Chunking | [LongtermMemoryHelper.cs](Utilities/LongtermMemoryHelper.cs#L476-L530) | 476-530 | 490 | ✅ |
+| 6 | Keyword-Extraktion | [KeywordExtractor.cs](Utilities/KeywordExtractor.cs#L114-L137) | 114-137 | 137 | ✅ |
+| 7 | Dense Retriever | [LongtermMemoryHelper.cs](Utilities/LongtermMemoryHelper.cs#L365-L395) | 365-395 | 384 | ✅ |
 | 8 | Hybrid Retrieval | [StepLookupKernelMemory.cs](Process/Steps/StepLookupKernelMemory.cs#L110-L125) | 110-125 | 115 | ✅ |
-| 9 | Reranking | [Reranker.cs](Utilities/Reranker.cs#L28-L110) | 28-110 | 69 | ✅ |
-| 10 | Halluzination | [ResponseStepWithHalluCheck.cs](Process/Steps/ResponseStepWithHalluCheck.cs#L58-L105) | 58-105 | 84 | ✅ |
+| 9 | Reranking | [Reranker.cs](Utilities/Reranker.cs#L44-L115) | 44-115 | 79 | ✅ |
+| 10 | Halluzination | [ResponseStepWithHalluCheck.cs](Process/Steps/ResponseStepWithHalluCheck.cs#L72-L115) | 72-115 | 103 | ✅ |
 | 11 | Live-Demo | [Program.cs](Program.cs) | Full flow | - | - |
 
 ---
@@ -28,14 +28,14 @@
 ## Slide 4: Dokumenten-Normalisierung
 
 ### 📁 File Location
-**Path**: [Decoder/CustomPdfDecoder.cs](Decoder/CustomPdfDecoder.cs#L240-L266)  
-**Lines**: 240-266 (NormalizeText method)  
+**Path**: [Decoder/CustomPdfDecoder.cs](Decoder/CustomPdfDecoder.cs#L254-L294)  
+**Lines**: 254-294 (NormalizeText method)  
 **Region**: `#region Slide 4: Dokumenten-Normalisierung`
 
 ### 🎯 Demo Setup
-**Breakpoint**: Line 247 (inside `NormalizeText`)  
+**Breakpoint**: Line 279 (inside `NormalizeText`)  
 **How to navigate**: 
-- Press `Ctrl+G` → type `CustomPdfDecoder.cs:247`
+- Press `Ctrl+G` → type `CustomPdfDecoder.cs:279`
 - OR: Press `Ctrl+Shift+O` → search "NormalizeText"
 - OR: Expand `Slide 4` region in outline view
 
@@ -47,14 +47,14 @@ words         // Array after stopword filtering
 ```
 
 ### 🎬 Demo Flow
-1. Set breakpoint at line 247
+1. Set breakpoint at line 279
 2. Run: `dotnet run -- --ollama --import`
 3. When breakpoint hits, show `text` variable (original)
 4. Press F10 to step through each normalization step:
-   - Line 247: Lowercase → `"das ist ein beispiel-text! mit satzzeichen."`
-   - Line 250: Remove punctuation → `"das ist ein beispiel text mit satzzeichen"`
-   - Line 253-256: Remove stopwords → `["beispiel", "text", "satzzeichen"]`
-   - Line 259: Join and trim → `"beispiel text satzzeichen"`
+   - Line 279: Lowercase → `"das ist ein beispiel-text! mit satzzeichen."`
+   - Line 282: Remove punctuation → `"das ist ein beispiel text mit satzzeichen"`
+   - Line 285-288: Remove stopwords → `["beispiel", "text", "satzzeichen"]`
+   - Line 291: Join and trim → `"beispiel text satzzeichen"`
 
 ### 💬 Talking Points
 > "Before indexing, we run a complete normalization pipeline: **lowercase → remove punctuation → filter stopwords → clean whitespace**. This is the textbook RAG preprocessing approach."
@@ -71,14 +71,14 @@ words         // Array after stopword filtering
 ## Slide 5: Chunking-Strategien
 
 ### 📁 File Location
-**Path**: [Utilities/LongtermMemoryHelper.cs](Utilities/LongtermMemoryHelper.cs#L475-L530)  
-**Lines**: 475-530 (GetAdjacentChunksInMemoriesAsync)  
+**Path**: [Utilities/LongtermMemoryHelper.cs](Utilities/LongtermMemoryHelper.cs#L476-L530)  
+**Lines**: 476-530 (GetAdjacentChunksInMemoriesAsync)  
 **Region**: `#region Slide 5: Chunking-Strategien - Adjacent Chunks (Overlap)`
 
 ### 🎯 Demo Setup
-**Breakpoint**: Line 485 (inside adjacent chunks loop)  
+**Breakpoint**: Line 490 (inside adjacent chunks loop)  
 **How to navigate**:
-- Press `Ctrl+G` → type `LongtermMemoryHelper.cs:485`
+- Press `Ctrl+G` → type `LongtermMemoryHelper.cs:490`
 - OR: Search for "GetAdjacentChunksInMemoriesAsync"
 
 ### 👀 Watch Variables
@@ -90,12 +90,24 @@ allsearchResults          // Final list with adjacent chunks
 ```
 
 ### 🎬 Demo Flow
-1. Set breakpoint at line 485
-2. Run a query that matches a chunk
-3. Show how code fetches partition N-1 and N+1
-4. Explain: "This is our **overlap strategy** - we fetch chunks before/after to preserve context"
+
+**⚠️ IMPORTANT**: This breakpoint only hits during **QUERY mode**, not during import!
+
+#### Preparation (if documents not imported yet):
+```bash
+dotnet run -- --ollama --import
+```
+
+#### Demo Steps:
+1. Use launch config: **"RAG Demo - Slide 5 (Chunking - Query Mode)"** (runs `--ollama` without `--import`)
+2. Set breakpoint at line 490
+3. Ask a question: "What is RAG?" or "Explain Azure microservices"
+4. Breakpoint hits → show how code fetches partition N-1 and N+1
+5. Explain: "This is our **overlap strategy** - we fetch chunks before/after to preserve context"
 
 ### 💬 Talking Points
+> "⚠️ **Key point**: Chunks are **created during import** by Kernel Memory pipeline (internally), but we **observe them during retrieval** when reconstructing context."
+
 > "We don't just return the matching chunk. We fetch **adjacent chunks** (before/after) to preserve context boundaries."
 
 > "Think of it like reading a highlighted passage in a book - you need the sentences before and after to understand the full context. That's what this overlap strategy does."
@@ -125,14 +137,14 @@ We return: [Chunk 4] [Chunk 5] [Chunk 6]
 ## Slide 6: Keyword-Extraktion
 
 ### 📁 File Location
-**Path**: [Utilities/KeywordExtractor.cs](Utilities/KeywordExtractor.cs#L40-L178)  
-**Lines**: 40-178 (4 methods)  
+**Path**: [Utilities/KeywordExtractor.cs](Utilities/KeywordExtractor.cs#L114-L137)  
+**Lines**: 114-137 (ExtractKeywords method)  
 **Region**: `#region Slide 6: Keyword-Extraktion`
 
 ### 🎯 Demo Setup
-**Breakpoint**: Line 54 (after `ExtractKeywords` returns)  
+**Breakpoint**: Line 137 (after `return keywords.Take(maxKeywords).ToList();`)  
 **How to navigate**:
-- Press `Ctrl+G` → type `KeywordExtractor.cs:54`
+- Press `Ctrl+G` → type `KeywordExtractor.cs:137`
 - OR: Collapse all regions (`Ctrl+K, Ctrl+0`), expand Slide 6 region
 
 ### 👀 Watch Variables
@@ -146,27 +158,29 @@ namedEntities      // Capitalized terms
 
 ### 🎬 Demo Flow - Show All 4 Methods
 
+**Launch Config**: Use **"RAG Demo - Slide 6 (Keywords - Import Mode)"** to see keyword extraction during document import at line 173 in `GenerateTagsHandler.cs`
+
 #### **Method 1: TF-IDF Frequency Analysis**
 - **Region**: `#region 6.1: Method 1 - TF-IDF Frequency Analysis`
-- **Lines**: 80-95
+- **Lines**: 75-99
 - **Demo**: Step into `ExtractFrequentWords`, show word frequency counting
 - **Explain**: "Finds most common non-stopword terms"
 
 #### **Method 2: Technical Term Detection**
 - **Region**: `#region 6.2: Method 2 - Technical Term Detection`
-- **Lines**: 97-105
-- **Demo**: Show `TechnicalIndicators` dictionary (lines 24-30)
+- **Lines**: 103-111
+- **Demo**: Show `TechnicalIndicators` dictionary (lines 32-38)
 - **Explain**: "Predefined vocabulary matching - finds 'api', 'docker', 'kubernetes', etc."
 
 #### **Method 3: RAKE Phrase Extraction**
 - **Region**: `#region 6.3: Method 3 - RAKE Phrase Extraction`
-- **Lines**: 115-150
+- **Lines**: 118-162
 - **Demo**: Show phrase detection between stopwords
 - **Explain**: "Extracts multi-word key phrases like 'service mesh' or 'container orchestration'"
 
 #### **Method 4: Named Entity Recognition**
 - **Region**: `#region 6.4: Method 4 - Named Entity Recognition`
-- **Lines**: 154-178
+- **Lines**: 166-190
 - **Demo**: Show capitalized sequence detection
 - **Explain**: "Pattern-based NER - finds 'Azure', 'Kubernetes', proper nouns"
 
@@ -189,14 +203,14 @@ namedEntities      // Capitalized terms
 ## Slide 7: Dense Retriever
 
 ### 📁 File Location
-**Path**: [Utilities/LongtermMemoryHelper.cs](Utilities/LongtermMemoryHelper.cs#L340-L370)  
-**Lines**: 340-370 (GetLongTermMemory method)  
+**Path**: [Utilities/LongtermMemoryHelper.cs](Utilities/LongtermMemoryHelper.cs#L365-L395)  
+**Lines**: 365-395 (GetLongTermMemory method)  
 **Region**: `#region Slide 7: Dense Retriever + Slide 8: Hybrid Retrieval`
 
 ### 🎯 Demo Setup
-**Breakpoint**: Line 350 (at `SearchAsync` call)  
+**Breakpoint**: Line 384 (at `SearchAsync` call)  
 **How to navigate**:
-- Press `Ctrl+G` → type `LongtermMemoryHelper.cs:350`
+- Press `Ctrl+G` → type `LongtermMemoryHelper.cs:384`
 
 ### 👀 Watch Variables
 ```csharp
@@ -207,7 +221,7 @@ memories            // Search results with relevance scores
 ```
 
 ### 🎬 Demo Flow
-1. Set breakpoint at line 350
+1. Set breakpoint at line 384
 2. Run query: "Azure microservices architecture"
 3. Show `SearchAsync` parameters:
    - `query`: The user's question
@@ -242,8 +256,8 @@ Returns: Chunk A, Chunk C (most similar)
 **Lines**: 110-125 (keyword filter extraction)
 
 ### 📁 Secondary File
-**Path**: [Utilities/LongtermMemoryHelper.cs](Utilities/LongtermMemoryHelper.cs#L340-L350)  
-**Lines**: 340-350 (filter application)
+**Path**: [Utilities/LongtermMemoryHelper.cs](Utilities/LongtermMemoryHelper.cs#L365-L390)  
+**Lines**: 365-390 (filter application)
 
 ### 🎯 Demo Setup
 **Breakpoint**: Line 115 in `StepLookupKernelMemory.cs`  
@@ -259,6 +273,8 @@ memories            // Results after hybrid filtering
 ```
 
 ### 🎬 Demo Flow
+
+**Launch Config**: Use **"RAG Demo - Slides 7-10"** (query mode without `--import`)
 
 #### Step 1: Keyword Extraction from Query
 - **File**: `StepLookupKernelMemory.cs` lines 110-125
@@ -322,8 +338,8 @@ Result: High recall + High precision! 🎯
 ## Slide 9: Reranking
 
 ### 📁 Primary File
-**Path**: [Utilities/Reranker.cs](Utilities/Reranker.cs#L28-L110)  
-**Lines**: 28-110 (RerankAsync method)  
+**Path**: [Utilities/Reranker.cs](Utilities/Reranker.cs#L44-L115)  
+**Lines**: 44-115 (RerankAsync method)  
 **Region**: `#region 9.1: Semantic Reranking (Embedding-based)`
 
 ### 📁 Application Points
@@ -332,9 +348,9 @@ Result: High recall + High precision! 🎯
 - Lines 446-455: Application point #2 (AskAsync path)
 
 ### 🎯 Demo Setup
-**Breakpoint**: Line 69 in `Reranker.cs` (inside reranking loop)  
+**Breakpoint**: Line 79 in `Reranker.cs` (inside reranking loop)  
 **How to navigate**:
-- Press `Ctrl+G` → type `Reranker.cs:69`
+- Press `Ctrl+G` → type `Reranker.cs:79`
 - OR: Expand `#region Slide 9: Reranking Implementation`
 
 ### 👀 Watch Variables
@@ -353,8 +369,8 @@ sorted              // List after reranking
 ### 🎬 Demo Flow
 
 #### Setup
-1. Terminal: `dotnet run -- --ollama`
-2. Set breakpoint at `Reranker.cs` line 69
+1. Launch config: **"RAG Demo - Slides 7-10"**
+2. Set breakpoint at `Reranker.cs` line 79
 3. Ask query: "Azure microservices architecture"
 
 #### Step-by-Step Demo
@@ -364,10 +380,10 @@ sorted              // List after reranking
    - Example: `[Doc A: 0.78, Doc B: 0.82, Doc C: 0.75]`
 
 2. **Step Through Reranking Loop** (F10 repeatedly)
-   - Line 58: Generate document embedding
-   - Line 63: Compute cosine similarity
+   - Line 73: Generate document embedding
+   - Line 78: Compute cosine similarity
    - Watch `similarity` variable - this is the reranking score
-   - Line 66: Blend scores (70% new, 30% original)
+   - Line 81: Blend scores (70% new, 30% original)
    - Show calculation: `blendedScore = (0.7 * similarity) + (0.3 * doc.Score)`
 
 3. **Show Reordered Results**
@@ -443,14 +459,14 @@ Total: ~700ms for high-quality results! ✅
 ## Slide 10: Halluzinations-Prävention
 
 ### 📁 File Location
-**Path**: [Process/Steps/ResponseStepWithHalluCheck.cs](Process/Steps/ResponseStepWithHalluCheck.cs#L58-L105)  
-**Lines**: 58-105 (hallucination check logic)  
+**Path**: [Process/Steps/ResponseStepWithHalluCheck.cs](Process/Steps/ResponseStepWithHalluCheck.cs#L72-L115)  
+**Lines**: 72-115 (hallucination check logic)  
 **Region**: `#region Slide 10: Hallucination Check Logic`
 
 ### 🎯 Demo Setup
-**Breakpoint**: Line 84 (after LLM check completes)  
+**Breakpoint**: Line 103 (after LLM check completes)  
 **How to navigate**:
-- Press `Ctrl+G` → type `ResponseStepWithHalluCheck.cs:84`
+- Press `Ctrl+G` → type `ResponseStepWithHalluCheck.cs:103`
 
 ### 👀 Watch Variables
 ```csharp
@@ -463,29 +479,29 @@ isGrounded          // Boolean: Is answer grounded in context?
 ### 🎬 Demo Flow
 
 #### Setup
-1. Run: `dotnet run -- --ollama`
-2. Set breakpoint at line 84
+1. Launch config: **"RAG Demo - Slides 7-10"**
+2. Set breakpoint at line 103
 3. Ask a question that triggers RAG retrieval
 
 #### Step-by-Step Demo
 
 **Step 1: Show Context Extraction**
-- Line 68: Extract context from last user message
+- Line 79: Extract context from last user message
 - Show `contextContent` - this is what was retrieved from documents
 - Example: *"Azure Kubernetes Service provides container orchestration..."*
 
 **Step 2: LLM Fact-Checker Call**
-- Lines 75-79: Separate GPT-3.5 model invoked
+- Lines 88-98: Separate GPT-3.5 model invoked
 - Show prompt in `Plugins/Prompts/HalucinationCheckPlugin/`
 - Prompt asks: "Is the answer supported by the context?"
 
 **Step 3: Check Result**
-- Line 84: Inspect `checkResult` variable
+- Line 103: Inspect `checkResult` variable
 - Look for: `"Score: YES"` (grounded) or `"Score: NO"` (hallucination)
 - Show `isGrounded` boolean derived from check
 
 **Step 4: Warning Application**
-- Lines 97-100: If NOT grounded, prepend warning
+- Lines 112-115: If NOT grounded, prepend warning
 - Show modified response: `"[Warning: This answer is not based on the retrieved documents.]\n" + response.Content`
 
 ### 💬 Talking Points
@@ -739,13 +755,13 @@ Use VS Code's **Outline View** (Ctrl+Shift+E) to see all regions and jump direct
 
 ### Breakpoint Management
 Create a **breakpoint list** before your presentation:
-1. CustomPdfDecoder.cs:247
-2. KeywordExtractor.cs:54
-3. LongtermMemoryHelper.cs:350
-4. LongtermMemoryHelper.cs:485
+1. CustomPdfDecoder.cs:279
+2. KeywordExtractor.cs:137
+3. LongtermMemoryHelper.cs:384
+4. LongtermMemoryHelper.cs:490
 5. StepLookupKernelMemory.cs:115
-6. Reranker.cs:69
-7. ResponseStepWithHalluCheck.cs:84
+6. Reranker.cs:79
+7. ResponseStepWithHalluCheck.cs:103
 
 Save as launch configuration in `.vscode/launch.json` (see next section)
 

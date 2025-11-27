@@ -24,20 +24,85 @@ namespace localRAG.Utilities
     /// </summary>
     public static class KeywordExtractor
     {
-        private static readonly HashSet<string> GermanStopwords = new(StringComparer.OrdinalIgnoreCase)
+        private static readonly HashSet<string> Stopwords = new(StringComparer.OrdinalIgnoreCase)
         {
+            // German stopwords
             "der", "die", "das", "und", "oder", "aber", "in", "auf", "von", "zu", "mit", "für",
             "ist", "sind", "war", "waren", "wird", "werden", "wurde", "wurden", "hat", "haben",
             "ein", "eine", "einer", "einem", "einen", "des", "dem", "den", "als", "auch", "an",
             "bei", "nach", "um", "am", "im", "zum", "zur", "über", "unter", "durch", "vor",
-            "this", "that", "the", "and", "or", "but", "in", "on", "at", "to", "for", "of",
-            "is", "are", "was", "were", "be", "been", "have", "has", "had", "do", "does", "did"
+            
+            // English stopwords
+            "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with",
+            "is", "are", "was", "were", "be", "been", "being", "have", "has", "had", "having",
+            "do", "does", "did", "doing", "would", "should", "could", "ought", "will", "shall",
+            "may", "might", "must", "can", "this", "that", "these", "those", "i", "you", "he",
+            "she", "it", "we", "they", "them", "their", "what", "which", "who", "when", "where",
+            "why", "how", "all", "each", "every", "both", "few", "more", "most", "other", "some",
+            "such", "no", "nor", "not", "only", "own", "same", "so", "than", "too", "very",
+            "from", "up", "down", "out", "off", "over", "under", "again", "further", "then",
+            "once", "here", "there", "about", "above", "after", "before", "below", "between",
+            "during", "through", "into", "by", "as", "if", "because", "while", "until"
         };
 
         private static readonly HashSet<string> TechnicalIndicators = new(StringComparer.OrdinalIgnoreCase)
         {
-            "api", "sdk", "http", "rest", "json", "xml", "sql", "nosql", "docker", "kubernetes",
-            "microservice", "architecture", "pattern", "framework", "library", "database", "cache"
+            // API & Web Technologies
+            "api", "sdk", "http", "https", "rest", "graphql", "grpc", "json", "xml", "yaml",
+            "oauth", "jwt", "cors", "webhook", "endpoint", "middleware",
+            
+            // Data Storage & Databases
+            "sql", "nosql", "mongodb", "postgresql", "redis", "cosmos", "dynamodb",
+            "database", "cache", "blob", "storage", "repository", "index", "schema",
+            
+            // Cloud & Infrastructure
+            "docker", "kubernetes", "k8s", "azure", "aws", "gcp", "cloud", "serverless",
+            "container", "pod", "deployment", "service", "ingress", "namespace",
+            
+            // Architecture & Design
+            "microservice", "architecture", "pattern", "framework", "library", "plugin",
+            "monolith", "distributed", "event-driven", "cqrs", "saga", "circuit-breaker",
+            
+            // AI & Machine Learning
+            "llm", "gpt", "embedding", "vector", "semantic", "transformer", "bert",
+            "openai", "ollama", "anthropic", "claude", "gemini", "model", "inference",
+            "fine-tuning", "prompt", "completion", "chat", "assistant",
+            
+            // RAG & Knowledge Management
+            "rag", "retrieval", "augmented", "generation", "knowledge", "context",
+            "chunk", "chunking", "similarity", "cosine", "relevance", "rerank",
+            "reranking", "hybrid-search", "semantic-search", "vector-search",
+            "kernel-memory", "semantic-kernel", "memory", "recall",
+            
+            // Document Processing & Text Extraction
+            "pdf", "ocr", "tesseract", "docling", "pypdf", "pdfplumber", "tika",
+            "markdown", "html", "plaintext", "document", "parser", "extractor",
+            "layout", "table", "figure", "caption", "header", "footer", "metadata",
+            "annotation", "bookmark", "toc", "page", "paragraph", "sentence",
+            
+            // NLP & Text Analysis
+            "nlp", "tokenization", "lemmatization", "stemming", "stopword",
+            "tf-idf", "bm25", "rake", "named-entity", "ner", "pos-tagging",
+            "keyword", "phrase", "ngram", "bigram", "trigram", "collocation",
+            "sentiment", "classification", "clustering", "topic-modeling",
+            
+            // Search & Retrieval
+            "elasticsearch", "solr", "lucene", "search", "query", "filter",
+            "facet", "aggregation", "ranking", "scoring", "boost", "fuzzy",
+            "wildcard", "proximity", "phrase-match", "inverted-index",
+            
+            // Programming & Development
+            "csharp", "dotnet", "python", "typescript", "javascript", "java",
+            "async", "await", "task", "thread", "parallel", "concurrent",
+            "exception", "logging", "telemetry", "metric", "trace", "span",
+            
+            // Security & Authentication
+            "encryption", "decryption", "hash", "salt", "certificate", "tls",
+            "ssl", "authentication", "authorization", "rbac", "permissions",
+            
+            // Testing & Quality
+            "unittest", "integration-test", "e2e", "mock", "stub", "fixture",
+            "assertion", "coverage", "benchmark", "profiling"
         };
 
         /// <summary>
@@ -80,7 +145,7 @@ namespace localRAG.Utilities
         private static List<string> ExtractFrequentWords(string text, int topN)
         {
             var words = Regex.Split(text.ToLowerInvariant(), @"\W+")
-                .Where(w => w.Length > 3 && !GermanStopwords.Contains(w))
+                .Where(w => w.Length > 3 && !Stopwords.Contains(w))
                 .ToList();
 
             var wordFrequency = words
@@ -116,56 +181,66 @@ namespace localRAG.Utilities
         #region 6.3: Method 3 - RAKE Phrase Extraction
         
         /// <summary>
-        /// Extract key phrases using RAKE-inspired approach (noun phrases between stopwords)
-        /// Demonstrates: Multi-word phrase detection, phrase scoring
+        /// Extract key phrases using RAKE approach (Rapid Automatic Keyword Extraction)
+        /// 
+        /// RAKE Algorithm:
+        /// 1. Split text into candidate phrases using stopwords as DELIMITERS
+        /// 2. Keep content words together (e.g., "cloud native architecture")
+        /// 3. Calculate word scores based on co-occurrence
+        /// 4. Score phrases by summing their word scores
+        /// 
+        /// Demonstrates: Multi-word phrase detection with stopwords as boundaries
         /// </summary>
         private static List<string> ExtractKeyPhrases(string text, int topN)
         {
-            // Split by sentence-ending punctuation
-            var sentences = Regex.Split(text, @"[.!?;]")
-                .Where(s => !string.IsNullOrWhiteSpace(s))
+            if (string.IsNullOrWhiteSpace(text))
+                return new List<string>();
+
+            // Step 1: Create stopword/punctuation delimiter pattern
+            var stopwordPattern = string.Join("|", Stopwords.Select(Regex.Escape));
+            var delimiterPattern = $@"\b({stopwordPattern})\b|[^\w\s]+";
+            
+            // Step 2: Split text into candidate phrases (stopwords act as delimiters)
+            var candidatePhrases = Regex.Split(text.ToLowerInvariant(), delimiterPattern, RegexOptions.IgnoreCase)
+                .Select(p => p.Trim())
+                .Where(p => !string.IsNullOrWhiteSpace(p))
+                .Where(p => p.Length > 3) // Skip very short fragments
+                .Where(p => !Stopwords.Contains(p)) // Skip any remaining stopwords
                 .ToList();
 
-            var phrases = new List<string>();
+            // Step 3: Extract multi-word phrases (2-4 words)
+            var multiWordPhrases = candidatePhrases
+                .Select(phrase => phrase.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries))
+                .Where(words => words.Length >= 2 && words.Length <= 4) // Multi-word phrases only
+                .Where(words => words.All(w => w.Length > 2)) // All words must be substantial
+                .Select(words => string.Join(" ", words))
+                .ToList();
 
-            foreach (var sentence in sentences)
-            {
-                // Split sentence into words
-                var words = Regex.Split(sentence.ToLowerInvariant(), @"\W+")
-                    .Where(w => !string.IsNullOrWhiteSpace(w))
-                    .ToList();
+            // Step 4: Calculate word frequencies for scoring
+            var allWords = multiWordPhrases
+                .SelectMany(phrase => phrase.Split(' '))
+                .ToList();
 
-                // Build phrases between stopwords
-                var currentPhrase = new List<string>();
-                
-                foreach (var word in words)
-                {
-                    if (GermanStopwords.Contains(word))
-                    {
-                        // Stopword encountered - save accumulated phrase if valid
-                        if (currentPhrase.Count >= 2 && currentPhrase.Count <= 3)
-                        {
-                            phrases.Add(string.Join(" ", currentPhrase));
-                        }
-                        currentPhrase.Clear();
-                    }
-                    else if (word.Length > 2) // Ignore very short words
-                    {
-                        currentPhrase.Add(word);
-                    }
-                }
+            var wordFrequency = allWords
+                .GroupBy(w => w)
+                .ToDictionary(g => g.Key, g => g.Count());
 
-                // Don't forget the last phrase
-                if (currentPhrase.Count >= 2 && currentPhrase.Count <= 3)
-                {
-                    phrases.Add(string.Join(" ", currentPhrase));
-                }
-            }
-
-            // Score phrases by word frequency (simplified RAKE scoring)
-            var phraseScores = phrases
+            // Step 5: Score phrases (sum of word frequencies * phrase length bonus)
+            var phraseScores = multiWordPhrases
                 .GroupBy(p => p)
-                .Select(g => new { Phrase = g.Key, Score = g.Count() * g.Key.Split(' ').Length })
+                .Select(g => new
+                {
+                    Phrase = g.Key,
+                    Frequency = g.Count(),
+                    WordScore = g.Key.Split(' ').Sum(w => wordFrequency.GetValueOrDefault(w, 0)),
+                    LengthBonus = g.Key.Split(' ').Length
+                })
+                .Select(x => new
+                {
+                    x.Phrase,
+                    // Combined score: word co-occurrence + frequency + length bonus
+                    Score = (x.WordScore * x.Frequency) + (x.LengthBonus * 2)
+                })
                 .OrderByDescending(x => x.Score)
                 .ThenBy(x => x.Phrase) // Deterministic ordering
                 .Take(topN)
@@ -192,7 +267,7 @@ namespace localRAG.Utilities
             var entities = matches
                 .Cast<Match>()
                 .Select(m => m.Value)
-                .Where(e => e.Length > 2 && !GermanStopwords.Contains(e))
+                .Where(e => e.Length > 2 && !Stopwords.Contains(e))
                 .GroupBy(e => e)
                 .Select(g => new { Entity = g.Key, Count = g.Count() })
                 .OrderByDescending(x => x.Count)

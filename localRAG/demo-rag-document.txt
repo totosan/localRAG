@@ -11,7 +11,13 @@ The development of RAG systems emerged from the recognition of several key limit
 Early attempts to address these issues involved fine-tuning models on specific datasets or increasing model size to capture more knowledge. However, these approaches proved expensive, time-consuming, and ultimately limited in their effectiveness. The RAG paradigm offered a more elegant solution by separating knowledge storage from the reasoning process.
 
 Architecture and Components
+----
 
+The development of RAG systems emerged from the recognition of several key limitations in pure language models. Traditional large language models, while impressive in their capabilities, suffer from knowledge cutoff dates, meaning they cannot access information beyond their training data. They are also prone to hallucinations, where the model generates plausible-sounding but factually incorrect information. Additionally, these models struggle with domain-specific knowledge that wasn't well-represented in their training data.
+
+Early attempts to address these issues involved fine-tuning models on specific datasets or increasing model size to capture more knowledge. However, these approaches proved expensive, time-consuming, and ultimately limited in their effectiveness. The RAG paradigm offered a more elegant solution by separating knowledge storage from the reasoning process.
+
+Architecture and Components
 A typical RAG system consists of three primary components working in concert. First, the document store or knowledge base contains the corpus of information that the system can access. This might include technical documentation, research papers, company policies, or any other relevant text data. The documents in this store are typically preprocessed and indexed to enable efficient retrieval.
 
 Second, the retrieval mechanism serves as the bridge between user queries and the document store. Modern retrieval systems often employ dense vector representations, where both documents and queries are encoded into high-dimensional embedding spaces. This allows for semantic similarity matching, where the system can find relevant documents even when they don't share exact keywords with the query. The retrieval component typically returns the top-k most relevant document chunks based on similarity scores.
@@ -19,6 +25,8 @@ Second, the retrieval mechanism serves as the bridge between user queries and th
 Third, the generation component consists of a large language model that receives both the user's query and the retrieved context. The model synthesizes this information to produce a coherent, contextually appropriate response. The key innovation here is that the model doesn't need to memorize all facts; instead, it acts more like a skilled reader who can understand and summarize relevant information from provided sources.
 
 The Chunking Strategy
+
+-----
 
 One of the most critical aspects of RAG implementation is the chunking strategy - how documents are divided into manageable pieces for storage and retrieval. Effective chunking balances several competing concerns. Chunks must be small enough to be processed efficiently and to ensure that retrieved context is highly relevant. However, they must be large enough to maintain sufficient context and coherence.
 
